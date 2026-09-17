@@ -1,0 +1,70 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "notion-bookmark",
+  "title": "Raycast Notion Bookmark",
+  "description": "Search Notion databases by title and URL, then open the URL property in the browser.",
+  "icon": "icon.png",
+  "author": "kuroweb",
+  "categories": [
+    "Productivity",
+    "Web"
+  ],
+  "license": "MIT",
+  "platforms": [
+    "macOS"
+  ],
+  "commands": [
+    {
+      "name": "search-bookmarks",
+      "title": "Search Bookmarks",
+      "subtitle": "Notion",
+      "description": "Search selected Notion databases and open the URL property.",
+      "mode": "view",
+      "keywords": [
+        "notion",
+        "bookmark"
+      ]
+    },
+    {
+      "name": "configure-databases",
+      "title": "Configure Databases",
+      "subtitle": "Notion",
+      "description": "Choose which Notion databases to search.",
+      "mode": "view",
+      "keywords": [
+        "settings",
+        "database",
+        "notion"
+      ]
+    }
+  ],
+  "preferences": [
+    {
+      "name": "notionToken",
+      "type": "password",
+      "required": true,
+      "title": "Notion Personal Access Token",
+      "description": "Personal access token from Notion developer tools (app.notion.com/developers). It uses your workspace permissions.",
+      "placeholder": "ntn_..."
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.104.1",
+    "@raycast/utils": "^2.2.4"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.1.1",
+    "@types/node": "24.10.1",
+    "@types/react": "19.2.5",
+    "eslint": "^9.39.1",
+    "prettier": "^3.6.2",
+    "react": "^19.2.0",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "build": "ray build",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint"
+  }
+}
