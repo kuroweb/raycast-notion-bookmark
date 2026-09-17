@@ -1,6 +1,6 @@
 # Raycast Notion Bookmark
 
-Notion のデータベースをタイトルと URL で検索し、URL プロパティのリンクをブラウザで開く Raycast 拡張。
+Notion のデータベースにブックマークを保存し、タイトルと URL で検索して開く Raycast 拡張。
 
 ## セットアップ
 
@@ -41,13 +41,20 @@ Notion のデータベースをタイトルと URL で検索し、URL プロパ�
 ### 4. 検索するデータベースを選ぶ
 
 - コマンド Configure Databases を開き、検索するデータベースにチェックを入れて保存する。
-- Search Bookmarks は、ここで選んだデータベースだけを見る。
+- Search Bookmarks と Save Bookmark は、ここで選んだデータベースを使う。
 
 ## コマンド
 
 ### Search Bookmarks: ブックマークを検索して開く
 
 - タイトルと URL を横断検索する。Enter でブックマーク先を開く。
+
+### Save Bookmark: タイトルと URL を保存する
+
+- 開いているブラウザタブ、クリップボードの URL、または手入力から保存する。
+- Raycast のブラウザ拡張が入っていれば、開いているページの本文を markdown として Notion のページ本文に保存する。
+- 同じ URL が選んだデータベースにあれば保存済みと出す。同じデータベースへは二重保存しない。
+- 保存先は Configure Databases で選んだデータベース。複数あるときは選ぶ。前回の保存先を覚える。
 
 ### Configure Databases: 検索対象のデータベースを選ぶ
 

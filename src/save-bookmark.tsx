@@ -1,0 +1,321 @@
+import {
+  Action,
+  ActionPanel,
+  BrowserExtension,
+  Clipboard,
+  Form,
+  Icon,
+  LaunchProps,
+  LaunchType,
+  PopToRootType,
+  Toast,
+  closeMainWindow,
+  getPreferenceValues,
+  getSelectedText,
+  launchCommand,
+  openExtensionPreferences,
+  showHUD,
+  showToast,
+} from "@raycast/api";
+import { showFailureToast, usePromise } from "@raycast/utils";
+import { useState } from "react";
+import { URL } from "node:url";
+import { MAX_CLIP_CHARS, htmlToMarkdown, toMarkdown } from "./clip";
+import { createBookmark, findBookmarksByUrl, parseHttpUrl } from "./notion";
+import { loadLastSavedDataSourceId, loadSelectedDataSources, saveLastSavedDataSourceId } from "./storage";
+import { DataSource } from "./types";
+
+type FormValues = {
+  title?: string;
+  url?: string;
+  dataSourceId?: string;
+  clip?: string;
+};
+
+type FormDefaults = {
+  title: string;
+  url: string;
+  clip: string;
+  dataSourceId: string;
+  dataSources: DataSource[];
+};
+
+export default function SaveBookmark(props: LaunchProps) {
+  const { notionToken } = getPreferenceValues<Preferences>();
+  const [isSaving, setIsSaving] = useState(false);
+  const [urlValue, setUrlValue] = useState<string | null>(null);
+  const [dataSourceIdValue, setDataSourceIdValue] = useState<string | null>(null);
+  const { data, isLoading, error } = usePromise(loadFormDefaults, [props.fallbackText]);
+  const dataSources = data?.dataSources ?? [];
+  const urlForLookup = urlValue ?? data?.url ?? "";
+  const selectedDataSourceId = dataSourceIdValue ?? data?.dataSourceId ?? "";
+  const { data: existing = [] } = usePromise(
+    async (token: string, sources: DataSource[], url: string) => findBookmarksByUrl(token, sources, url),
+    [notionToken.trim(), dataSources, urlForLookup],
+    { execute: dataSources.length > 0 && parseHttpUrl(urlForLookup) !== null },
+  );
+  const existingInTarget =
+    existing.find((bookmark) => bookmark.dataSourceId === selectedDataSourceId) ?? existing[0] ?? null;
+
+  async function save(values: FormValues) {
+    if (isLoading || isSaving || error) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Form is not ready",
+        message: error?.message,
+      });
+      return;
+    }
+
+    const dataSource = dataSources.find((item) => item.id === values.dataSourceId);
+    if (!dataSource) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Select a database",
+      });
+      return;
+    }
+
+    const url = parseHttpUrl(values.url);
+    if (!url) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "URL must start with http:// or https://",
+      });
+      return;
+    }
+
+    const title = values.title?.trim() || titleFromUrl(url);
+    setIsSaving(true);
+    let hud: string | undefined;
+    try {
+      const duplicates = await findBookmarksByUrl(notionToken.trim(), dataSources, url);
+      const alreadySaved = duplicates.find((bookmark) => bookmark.dataSourceId === dataSource.id);
+      await saveLastSavedDataSourceId(dataSource.id);
+      if (alreadySaved) {
+        hud = `Already saved in ${dataSource.title}`;
+      } else {
+        const clip = toMarkdown(values.clip?.trim() || (await readPageClip()), url);
+        await createBookmark(notionToken.trim(), dataSource.id, title, url, clip || undefined);
+        hud = `Saved to ${dataSource.title}`;
+      }
+    } catch (saveError) {
+      await showFailureToast(saveError, { title: "Could not save bookmark" });
+      return;
+    } finally {
+      setIsSaving(false);
+    }
+
+    if (!hud) {
+      return;
+    }
+
+    try {
+      await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+      await showHUD(hud);
+    } catch {
+      await showToast({ style: Toast.Style.Success, title: hud });
+    }
+  }
+
+  return (
+    <Form
+      isLoading={isLoading || isSaving}
+      actions={
+        <ActionPanel>
+          <Action.SubmitForm
+            title={existingInTarget?.dataSourceId === selectedDataSourceId ? "Already Saved" : "Save Bookmark"}
+            onSubmit={save}
+          />
+          {existingInTarget ? (
+            <Action.OpenInBrowser title="Open Existing Bookmark" url={existingInTarget.notionUrl} />
+          ) : null}
+          <Action
+            title="Configure Databases"
+            icon={Icon.Gear}
+            onAction={() => {
+              launchCommand({
+                name: "configure-databases",
+                type: LaunchType.UserInitiated,
+              }).catch((configureError) =>
+                showFailureToast(configureError, { title: "Could not open Configure Databases" }),
+              );
+            }}
+          />
+          <Action title="Open Extension Preferences" icon={Icon.Key} onAction={openExtensionPreferences} />
+        </ActionPanel>
+      }
+    >
+      {error ? <Form.Description text={error.message} /> : null}
+      {!error && !isLoading && dataSources.length === 0 ? (
+        <Form.Description text="Open Configure Databases and choose which databases to use." />
+      ) : null}
+      {!error && dataSources.length > 0 ? (
+        <>
+          <Form.Description title="Status" text={savedStatusText(existing)} />
+          <Form.TextField
+            id="url"
+            title="URL"
+            placeholder="https://"
+            defaultValue={data?.url}
+            autoFocus={!data?.url}
+            onChange={setUrlValue}
+          />
+          <Form.TextField
+            id="title"
+            title="Title"
+            placeholder="Page title"
+            defaultValue={data?.title}
+            autoFocus={Boolean(data?.url) && !data?.title}
+          />
+          <Form.Dropdown
+            id="dataSourceId"
+            title="Database"
+            value={selectedDataSourceId}
+            storeValue
+            onChange={(id) => {
+              setDataSourceIdValue(id);
+              saveLastSavedDataSourceId(id).catch(() => undefined);
+            }}
+          >
+            {dataSources.map((dataSource) => (
+              <Form.Dropdown.Item key={dataSource.id} value={dataSource.id} title={dataSource.title} />
+            ))}
+          </Form.Dropdown>
+          <Form.TextArea
+            id="clip"
+            title="Page clip"
+            placeholder="Selected text or page content. Requires the Raycast browser extension."
+            defaultValue={data?.clip}
+          />
+        </>
+      ) : null}
+    </Form>
+  );
+}
+
+async function loadFormDefaults(fallbackText: string | undefined): Promise<FormDefaults> {
+  const dataSources = await loadSelectedDataSources();
+  const lastId = await loadLastSavedDataSourceId();
+  const dataSourceId = preferredDataSourceId(dataSources, lastId ?? undefined) ?? dataSources[0]?.id ?? "";
+  const fallbackUrl = parseHttpUrl(fallbackText);
+  if (fallbackUrl) {
+    const tab = await readActiveTab();
+    if (tab && tab.url === fallbackUrl) {
+      return {
+        title: tab.title,
+        url: fallbackUrl,
+        clip: await readPageClip(tab.id, tab.url),
+        dataSourceId,
+        dataSources,
+      };
+    }
+
+    return {
+      title: "",
+      url: fallbackUrl,
+      clip: "",
+      dataSourceId,
+      dataSources,
+    };
+  }
+
+  const fallbackTitle = fallbackText?.trim() ?? "";
+  const tab = await readActiveTab();
+  if (tab) {
+    return {
+      title: fallbackTitle || tab.title,
+      url: tab.url,
+      clip: await readPageClip(tab.id, tab.url),
+      dataSourceId,
+      dataSources,
+    };
+  }
+
+  const clipboardUrl = parseHttpUrl(await Clipboard.readText());
+  if (clipboardUrl) {
+    return { title: fallbackTitle, url: clipboardUrl, clip: "", dataSourceId, dataSources };
+  }
+
+  return {
+    title: fallbackTitle,
+    url: "",
+    clip: "",
+    dataSourceId,
+    dataSources,
+  };
+}
+
+function preferredDataSourceId(dataSources: DataSource[], id: string | undefined): string | undefined {
+  if (!id) {
+    return undefined;
+  }
+  return dataSources.some((dataSource) => dataSource.id === id) ? id : undefined;
+}
+
+async function readActiveTab(): Promise<{ id: number; title: string; url: string } | null> {
+  try {
+    const tabs = await BrowserExtension.getTabs();
+    const active = tabs.find((tab) => tab.active);
+    const url = parseHttpUrl(active?.url);
+    if (!active || !url) {
+      return null;
+    }
+    return { id: active.id, title: active.title?.trim() ?? "", url };
+  } catch {
+    return null;
+  }
+}
+
+async function readPageClip(tabId?: number, pageUrl?: string): Promise<string> {
+  try {
+    const html = await BrowserExtension.getContent({
+      format: "html",
+      ...(tabId === undefined ? {} : { tabId }),
+    });
+    const markdown = htmlToMarkdown(html, pageUrl);
+    if (markdown) {
+      return markdown;
+    }
+  } catch {
+    // Raycast browser extension may be missing.
+  }
+
+  try {
+    const selected = (await getSelectedText()).trim();
+    if (selected && !parseHttpUrl(selected)) {
+      return toMarkdown(selected, pageUrl).slice(0, MAX_CLIP_CHARS);
+    }
+  } catch {
+    // No selection in the previous app.
+  }
+
+  try {
+    const text = (
+      await BrowserExtension.getContent({
+        format: "text",
+        ...(tabId === undefined ? {} : { tabId }),
+      })
+    ).trim();
+    return toMarkdown(text, pageUrl).slice(0, MAX_CLIP_CHARS);
+  } catch {
+    return "";
+  }
+}
+
+function titleFromUrl(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "") || url;
+  } catch {
+    return url;
+  }
+}
+
+function savedStatusText(bookmarks: { dataSourceTitle: string }[]): string {
+  if (bookmarks.length === 0) {
+    return "Not saved";
+  }
+
+  const names = [...new Set(bookmarks.map((bookmark) => bookmark.dataSourceTitle))];
+  return `Already saved in ${names.join(", ")}`;
+}

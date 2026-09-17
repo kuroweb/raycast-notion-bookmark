@@ -60,7 +60,7 @@ export default function ConfigureDatabases() {
         <Form.Description text="No databases with a URL property are visible to this token. Check the token's access and URL properties, then reload." />
       ) : null}
       {!error && dataSources.length > 0 ? (
-        <Form.Description text="Choose which databases Search Bookmarks should query. Only databases with a URL property are listed." />
+        <Form.Description text="Choose which databases Search Bookmarks and Save Bookmark should use. Only databases with a URL property are listed." />
       ) : null}
       {dataSources.map((dataSource, index) => (
         <Form.Checkbox

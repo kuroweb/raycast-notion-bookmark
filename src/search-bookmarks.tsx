@@ -63,7 +63,11 @@ export default function SearchBookmarks() {
           icon={Icon.Warning}
           title="Failed to load"
           description={error.message}
-          actions={<SettingsActions />}
+          actions={
+            <ActionPanel>
+              <SettingsActions />
+            </ActionPanel>
+          }
         />
       ) : null}
       {!error && selected.length === 0 && !isLoadingSelection ? (
@@ -71,11 +75,25 @@ export default function SearchBookmarks() {
           icon={Icon.Gear}
           title="No databases selected"
           description="Open Configure Databases and choose which databases to search."
-          actions={<SettingsActions />}
+          actions={
+            <ActionPanel>
+              <SettingsActions />
+            </ActionPanel>
+          }
         />
       ) : null}
       {!error && selected.length > 0 && filtered.length === 0 && !isLoadingBookmarks ? (
-        <List.EmptyView icon={Icon.MagnifyingGlass} title="No results" description="Title and URL were searched." />
+        <List.EmptyView
+          icon={Icon.MagnifyingGlass}
+          title="No results"
+          description="Title and URL were searched."
+          actions={
+            <ActionPanel>
+              <SaveBookmarkAction />
+              <SettingsActions />
+            </ActionPanel>
+          }
+        />
       ) : null}
       {filtered.map((bookmark) => (
         <BookmarkItem key={bookmark.id} bookmark={bookmark} onReload={revalidate} />
@@ -100,6 +118,7 @@ function BookmarkItem({ bookmark, onReload }: { bookmark: Bookmark; onReload: ()
           {bookmark.url ? <Action.OpenInBrowser title="Open in Notion" url={bookmark.notionUrl} /> : null}
           <Action.CopyToClipboard title="Copy URL" content={openUrl} />
           <Action.CopyToClipboard title="Copy Notion URL" content={bookmark.notionUrl} />
+          <SaveBookmarkAction />
           <Action
             title="Reload"
             icon={Icon.ArrowClockwise}
@@ -109,6 +128,22 @@ function BookmarkItem({ bookmark, onReload }: { bookmark: Bookmark; onReload: ()
           <SettingsActions />
         </ActionPanel>
       }
+    />
+  );
+}
+
+function SaveBookmarkAction() {
+  return (
+    <Action
+      title="Save Bookmark"
+      icon={Icon.Plus}
+      shortcut={Keyboard.Shortcut.Common.New}
+      onAction={() => {
+        launchCommand({
+          name: "save-bookmark",
+          type: LaunchType.UserInitiated,
+        }).catch((error) => showFailureToast(error, { title: "Could not open Save Bookmark" }));
+      }}
     />
   );
 }

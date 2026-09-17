@@ -1,7 +1,8 @@
 import { URL } from "node:url";
+import { prepareClip } from "./clip";
 import { Bookmark, DataSource } from "./types";
 
-const NOTION_VERSION = "2025-09-03";
+const NOTION_VERSION = "2026-03-11";
 const NOTION_API = "https://api.notion.com/v1";
 const MAX_RETRY_ATTEMPTS = 5;
 
@@ -65,6 +66,65 @@ export async function loadBookmarks(token: string, dataSources: DataSource[]): P
   return pages.flat().sort((a, b) => b.lastEditedTime.localeCompare(a.lastEditedTime));
 }
 
+export async function createBookmark(
+  token: string,
+  dataSourceId: string,
+  title: string,
+  url: string,
+  clip?: string,
+): Promise<void> {
+  const parsedUrl = parseHttpUrl(url);
+  if (!parsedUrl) {
+    throw new Error("URL must start with http:// or https://");
+  }
+
+  const dataSource = await notionFetch<NotionDataSource>(token, `/data_sources/${encodeURIComponent(dataSourceId)}`, {
+    method: "GET",
+  });
+  if (dataSource.in_trash) {
+    throw new Error("This database is in the trash.");
+  }
+
+  const properties = dataSource.properties ?? {};
+  const titleName = titlePropertyName(properties);
+  const urlName = urlPropertyName(properties);
+  if (!titleName || !urlName) {
+    throw new Error("This database needs a title property and a URL property.");
+  }
+
+  const content = title.trim().slice(0, 2000) || "Untitled";
+  const markdown = clip ? prepareClip(clip, content) : "";
+  await notionFetch<NotionPage>(token, "/pages", {
+    method: "POST",
+    body: JSON.stringify({
+      parent: { type: "data_source_id", data_source_id: dataSourceId },
+      properties: {
+        [titleName]: { title: [{ type: "text", text: { content } }] },
+        [urlName]: { url: parsedUrl },
+      },
+      ...(markdown ? { markdown } : {}),
+    }),
+  });
+}
+
+export async function findBookmarksByUrl(token: string, dataSources: DataSource[], url: string): Promise<Bookmark[]> {
+  const parsedUrl = parseHttpUrl(url);
+  if (!parsedUrl || dataSources.length === 0) {
+    return [];
+  }
+
+  const found = await Promise.all(
+    dataSources.map(async (dataSource) => {
+      try {
+        return await findDataSourceBookmarksByUrl(token, dataSource, parsedUrl);
+      } catch {
+        return [];
+      }
+    }),
+  );
+  return found.flat();
+}
+
 async function loadDataSourceBookmarks(token: string, dataSource: DataSource): Promise<Bookmark[]> {
   const pages = await paginate<NotionPage>((cursor) =>
     notionFetch(token, `/data_sources/${encodeURIComponent(dataSource.id)}/query`, {
@@ -77,22 +137,54 @@ async function loadDataSourceBookmarks(token: string, dataSource: DataSource): P
     }),
   );
 
+  return pages.filter((page) => !page.in_trash && !page.archived).map((page) => toBookmark(page, dataSource));
+}
+
+async function findDataSourceBookmarksByUrl(token: string, dataSource: DataSource, url: string): Promise<Bookmark[]> {
+  const detail = await notionFetch<NotionDataSource>(token, `/data_sources/${encodeURIComponent(dataSource.id)}`, {
+    method: "GET",
+  });
+  const urlName = urlPropertyName(detail.properties ?? {});
+  if (!urlName) {
+    return [];
+  }
+
+  const variants = urlEqualsVariants(url);
+  const filter =
+    variants.length === 1
+      ? { property: urlName, url: { equals: variants[0] } }
+      : { or: variants.map((value) => ({ property: urlName, url: { equals: value } })) };
+
+  const pages = await paginate<NotionPage>((cursor) =>
+    notionFetch(token, `/data_sources/${encodeURIComponent(dataSource.id)}/query`, {
+      method: "POST",
+      body: JSON.stringify({
+        filter,
+        page_size: 100,
+        start_cursor: cursor,
+      }),
+    }),
+  );
+
   return pages
     .filter((page) => !page.in_trash && !page.archived)
-    .map((page) => {
-      const title = pageTitle(page.properties);
-      const url = pageUrl(page.properties);
-      return {
-        id: page.id,
-        title,
-        url,
-        notionUrl: page.url,
-        dataSourceId: dataSource.id,
-        dataSourceTitle: dataSource.title,
-        lastEditedTime: page.last_edited_time,
-        searchText: [title, url ?? ""].join("\n").toLowerCase(),
-      };
-    });
+    .map((page) => toBookmark(page, dataSource))
+    .filter((bookmark) => bookmark.url !== null && urlsMatch(bookmark.url, url));
+}
+
+function toBookmark(page: NotionPage, dataSource: DataSource): Bookmark {
+  const title = pageTitle(page.properties);
+  const url = pageUrl(page.properties);
+  return {
+    id: page.id,
+    title,
+    url,
+    notionUrl: page.url,
+    dataSourceId: dataSource.id,
+    dataSourceTitle: dataSource.title,
+    lastEditedTime: page.last_edited_time,
+    searchText: [title, url ?? ""].join("\n").toLowerCase(),
+  };
 }
 
 async function paginate<T>(fetchPage: (cursor: string | undefined) => Promise<NotionList<T>>): Promise<T[]> {
@@ -145,44 +237,88 @@ async function notionErrorMessage(response: Response): Promise<string> {
 }
 
 function pageTitle(properties: Record<string, NotionProperty>): string {
-  for (const property of Object.values(properties)) {
-    if (property.type === "title") {
-      return plainText(property.title) || "Untitled";
-    }
-  }
-  return "Untitled";
+  const name = titlePropertyName(properties);
+  return name ? plainText(properties[name].title) || "Untitled" : "Untitled";
 }
 
 function pageUrl(properties: Record<string, NotionProperty>): string | null {
-  const namedUrl = properties.URL;
-  if (namedUrl?.type === "url") {
-    return httpUrl(namedUrl.url);
-  }
-
-  for (const property of Object.values(properties)) {
-    if (property.type === "url") {
-      return httpUrl(property.url);
-    }
-  }
-
-  return null;
+  const name = urlPropertyName(properties);
+  return name ? parseHttpUrl(properties[name].url) : null;
 }
 
-function httpUrl(value: string | null | undefined): string | null {
+function titlePropertyName(properties: Record<string, { type: string }>): string | undefined {
+  for (const [name, property] of Object.entries(properties)) {
+    if (property.type === "title") {
+      return name;
+    }
+  }
+}
+
+function urlPropertyName(properties: Record<string, { type: string }>): string | undefined {
+  if (properties.URL?.type === "url") {
+    return "URL";
+  }
+
+  for (const [name, property] of Object.entries(properties)) {
+    if (property.type === "url") {
+      return name;
+    }
+  }
+}
+
+export function parseHttpUrl(value: string | null | undefined): string | null {
   if (!value) {
     return null;
   }
 
+  const trimmed = value.trim();
   try {
-    const parsed = new URL(value);
+    const parsed = new URL(trimmed);
     if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-      return parsed.toString();
+      return trimmed;
     }
   } catch {
     return null;
   }
 
   return null;
+}
+
+function urlsMatch(left: string, right: string): boolean {
+  const a = canonicalBookmarkUrl(left);
+  const b = canonicalBookmarkUrl(right);
+  return a !== null && a === b;
+}
+
+function canonicalBookmarkUrl(value: string): string | null {
+  const parsed = parseHttpUrl(value);
+  if (!parsed) {
+    return null;
+  }
+
+  const url = new URL(parsed);
+  url.hash = "";
+  url.hostname = url.hostname.toLowerCase();
+  if (url.pathname !== "/" && url.pathname.endsWith("/")) {
+    url.pathname = url.pathname.slice(0, -1);
+  }
+  return url.toString();
+}
+
+function urlEqualsVariants(url: string): string[] {
+  const parsed = new URL(url);
+  const variants = new Set<string>([parsed.toString()]);
+  if (parsed.pathname === "/") {
+    variants.add(`${parsed.protocol}//${parsed.host}`);
+    variants.add(`${parsed.protocol}//${parsed.host}/`);
+  } else if (parsed.pathname.endsWith("/")) {
+    parsed.pathname = parsed.pathname.slice(0, -1);
+    variants.add(parsed.toString());
+  } else {
+    parsed.pathname = `${parsed.pathname}/`;
+    variants.add(parsed.toString());
+  }
+  return [...variants];
 }
 
 function plainText(items: RichText[] | undefined): string {

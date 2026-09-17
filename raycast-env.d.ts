@@ -18,6 +18,8 @@ declare type Preferences = ExtensionPreferences
 declare namespace Preferences {
   /** Preferences accessible in the `search-bookmarks` command */
   export type SearchBookmarks = ExtensionPreferences & {}
+  /** Preferences accessible in the `save-bookmark` command */
+  export type SaveBookmark = ExtensionPreferences & {}
   /** Preferences accessible in the `configure-databases` command */
   export type ConfigureDatabases = ExtensionPreferences & {}
 }
@@ -25,6 +27,8 @@ declare namespace Preferences {
 declare namespace Arguments {
   /** Arguments passed to the `search-bookmarks` command */
   export type SearchBookmarks = {}
+  /** Arguments passed to the `save-bookmark` command */
+  export type SaveBookmark = {}
   /** Arguments passed to the `configure-databases` command */
   export type ConfigureDatabases = {}
 }
