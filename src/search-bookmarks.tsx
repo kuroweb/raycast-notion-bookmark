@@ -13,6 +13,7 @@ import { getFavicon, showFailureToast, useCachedPromise, usePromise } from "@ray
 import { useMemo, useState } from "react";
 import { hostname } from "./bookmark/url";
 import { loadBookmarks } from "./notion/bookmarks";
+import { matchKey } from "./notion/tags";
 import { loadSelectedDataSources } from "./storage";
 import { Bookmark } from "./types";
 
@@ -42,7 +43,7 @@ export default function SearchBookmarks() {
       isLoading={isLoadingSelection || isLoadingBookmarks}
       filtering={false}
       onSearchTextChange={setQuery}
-      searchBarPlaceholder="Search title or URL"
+      searchBarPlaceholder="Search title, URL, or tag"
       searchBarAccessory={
         selected.length > 0 ? (
           <List.Dropdown tooltip="Database" value={dataSourceId} onChange={setDataSourceId}>
@@ -82,7 +83,7 @@ export default function SearchBookmarks() {
         <List.EmptyView
           icon={Icon.MagnifyingGlass}
           title="No results"
-          description="Title and URL were searched."
+          description="Title, URL, and tags were searched."
           actions={
             <ActionPanel>
               <SaveBookmarkAction />
@@ -107,7 +108,11 @@ function BookmarkItem({ bookmark, onReload }: { bookmark: Bookmark; onReload: ()
       title={bookmark.title}
       subtitle={subtitle}
       icon={bookmark.url ? getFavicon(bookmark.url, { fallback: Icon.Link }) : Icon.Document}
-      accessories={[{ tag: bookmark.dataSourceTitle }]}
+      accessories={[
+        { tag: bookmark.dataSourceTitle },
+        // Cached entries from before tags existed have no tags field.
+        ...(bookmark.tags ?? []).slice(0, 3).map((name) => ({ tag: name })),
+      ]}
       actions={
         <ActionPanel>
           <Action.OpenInBrowser url={openUrl} />
@@ -165,10 +170,10 @@ function SettingsActions() {
 function filterBookmarks(bookmarks: Bookmark[], query: string, dataSourceId: string): Bookmark[] {
   const scoped =
     dataSourceId === ALL_DATA_SOURCES ? bookmarks : bookmarks.filter((item) => item.dataSourceId === dataSourceId);
-  const normalized = query.trim().toLowerCase();
-  if (normalized.length === 0) {
+  const terms = matchKey(query.trim()).split(/\s+/).filter(Boolean);
+  if (terms.length === 0) {
     return scoped;
   }
 
-  return scoped.filter((bookmark) => bookmark.searchText.includes(normalized));
+  return scoped.filter((bookmark) => terms.every((term) => bookmark.searchText.includes(term)));
 }

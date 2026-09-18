@@ -10,11 +10,17 @@ import {
   titlePropertyName,
   urlPropertyName,
 } from "./client";
-import { TAGS_PROPERTY, resolveTagIds, tagsDataSourceId } from "./tags";
+import { TAGS_PROPERTY, loadTags, loadTagsDataSourceId, matchKey, resolveTagIds, tagsDataSourceId } from "./tags";
 
 export async function loadBookmarks(token: string, dataSources: DataSource[]): Promise<Bookmark[]> {
-  const pages = await Promise.all(dataSources.map((dataSource) => loadDataSourceBookmarks(token, dataSource)));
-  return pages.flat().sort((a, b) => b.lastEditedTime.localeCompare(a.lastEditedTime));
+  const [pageGroups, tagNames] = await Promise.all([
+    Promise.all(dataSources.map((dataSource) => loadDataSourcePages(token, dataSource))),
+    loadTagNames(token, dataSources),
+  ]);
+
+  return pageGroups
+    .flatMap(({ dataSource, pages }) => pages.map((page) => toBookmark(page, dataSource, tagNames)))
+    .sort((a, b) => b.lastEditedTime.localeCompare(a.lastEditedTime));
 }
 
 export async function createBookmark(
@@ -96,7 +102,10 @@ export async function findBookmarksByUrl(
   return found.flat();
 }
 
-async function loadDataSourceBookmarks(token: string, dataSource: DataSource): Promise<Bookmark[]> {
+async function loadDataSourcePages(
+  token: string,
+  dataSource: DataSource,
+): Promise<{ dataSource: DataSource; pages: NotionPage[] }> {
   const pages = await paginate<NotionPage>((cursor) =>
     notionFetch(token, `/data_sources/${encodeURIComponent(dataSource.id)}/query`, {
       method: "POST",
@@ -108,7 +117,43 @@ async function loadDataSourceBookmarks(token: string, dataSource: DataSource): P
     }),
   );
 
-  return pages.filter((page) => !page.in_trash && !page.archived).map((page) => toBookmark(page, dataSource));
+  return {
+    dataSource,
+    pages: pages.filter((page) => !page.in_trash && !page.archived),
+  };
+}
+
+async function loadTagNames(token: string, dataSources: DataSource[]): Promise<Map<string, string>> {
+  const relatedIds = [
+    ...new Set(
+      (
+        await Promise.all(
+          dataSources.map(async (dataSource) => {
+            try {
+              return await loadTagsDataSourceId(token, dataSource.id);
+            } catch {
+              return undefined;
+            }
+          }),
+        )
+      ).filter((id): id is string => Boolean(id)),
+    ),
+  ];
+
+  const names = new Map<string, string>();
+  await Promise.all(
+    relatedIds.map(async (relatedId) => {
+      try {
+        const tags = await loadTags(token, relatedId);
+        for (const tag of tags) {
+          names.set(tag.id, tag.name);
+        }
+      } catch {
+        // Tags are optional; search still works on title and URL.
+      }
+    }),
+  );
+  return names;
 }
 
 async function findDataSourceBookmarksByUrl(token: string, dataSource: DataSource, url: string): Promise<Bookmark[]> {
@@ -143,9 +188,10 @@ async function findDataSourceBookmarksByUrl(token: string, dataSource: DataSourc
     .filter((bookmark) => bookmark.url !== null && urlsMatch(bookmark.url, url));
 }
 
-function toBookmark(page: NotionPage, dataSource: DataSource): Bookmark {
+function toBookmark(page: NotionPage, dataSource: DataSource, tagNames?: Map<string, string>): Bookmark {
   const title = pageTitle(page.properties);
   const url = pageUrl(page.properties);
+  const tags = tagNames ? pageTagNames(page.properties, tagNames) : [];
   return {
     id: page.id,
     title,
@@ -154,8 +200,28 @@ function toBookmark(page: NotionPage, dataSource: DataSource): Bookmark {
     dataSourceId: dataSource.id,
     dataSourceTitle: dataSource.title,
     lastEditedTime: page.last_edited_time,
-    searchText: [title, url ?? ""].join("\n").toLowerCase(),
+    tags,
+    searchText: matchKey([title, url ?? "", ...tags].join("\n")),
   };
+}
+
+function pageTagNames(properties: Record<string, NotionProperty>, tagNames: Map<string, string>): string[] {
+  const property = properties[TAGS_PROPERTY];
+  if (property?.type !== "relation") {
+    return [];
+  }
+
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const related of property.relation ?? []) {
+    const name = tagNames.get(related.id);
+    if (!name || seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
 }
 
 function pageTitle(properties: Record<string, NotionProperty>): string {

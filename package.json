@@ -18,7 +18,7 @@
       "name": "search-bookmarks",
       "title": "Search Bookmarks",
       "subtitle": "Notion",
-      "description": "Search selected Notion databases and open the URL property.",
+      "description": "Search selected Notion databases by title, URL, or tag and open the URL property.",
       "mode": "view",
       "keywords": [
         "notion",

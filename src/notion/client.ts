@@ -40,6 +40,8 @@ export type NotionProperty = {
   type: string;
   title?: RichText[];
   url?: string | null;
+  has_more?: boolean;
+  relation?: { id: string }[];
 };
 
 export async function paginate<T>(fetchPage: (cursor: string | undefined) => Promise<NotionList<T>>): Promise<T[]> {

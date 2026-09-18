@@ -24,7 +24,7 @@ export function parseTagNames(input: string | undefined): string[] {
     if (!name) {
       continue;
     }
-    const key = tagMatchKey(name);
+    const key = matchKey(name);
     if (seen.has(key)) {
       continue;
     }
@@ -39,20 +39,26 @@ export function tagsDataSourceId(schema: Record<string, NotionDataSourceProperty
   return property?.type === "relation" ? property.relation?.data_source_id : undefined;
 }
 
-export async function loadTagsForDataSource(token: string, dataSourceId: string): Promise<DataSourceTags | null> {
-  if (!dataSourceId) {
-    return null;
+export async function loadTagsDataSourceId(token: string, bookmarkDataSourceId: string): Promise<string | undefined> {
+  if (!bookmarkDataSourceId) {
+    return undefined;
   }
 
-  const dataSource = await notionFetch<NotionDataSource>(token, `/data_sources/${encodeURIComponent(dataSourceId)}`, {
-    method: "GET",
-  });
-  const relatedId = tagsDataSourceId(dataSource.properties);
+  const dataSource = await notionFetch<NotionDataSource>(
+    token,
+    `/data_sources/${encodeURIComponent(bookmarkDataSourceId)}`,
+    { method: "GET" },
+  );
+  return tagsDataSourceId(dataSource.properties);
+}
+
+export async function loadTagsForDataSource(token: string, dataSourceId: string): Promise<DataSourceTags | null> {
+  const relatedId = await loadTagsDataSourceId(token, dataSourceId);
   if (!relatedId) {
     return null;
   }
 
-  return { tagsDataSourceId: relatedId, tags: await loadTagPages(token, relatedId) };
+  return { tagsDataSourceId: relatedId, tags: await loadTags(token, relatedId) };
 }
 
 export async function resolveTagIds(
@@ -77,7 +83,7 @@ export async function resolveTagIds(
     throw new Error("The Tags database needs a title property.");
   }
 
-  let tags = await loadTagPages(token, relatedId);
+  let tags = await loadTags(token, relatedId);
   const existingIds = new Set(tags.map((tag) => tag.id));
   const ids: string[] = [];
   const seen = new Set<string>();
@@ -111,7 +117,7 @@ export async function resolveTagIds(
   return ids;
 }
 
-async function loadTagPages(token: string, dataSourceId: string): Promise<Tag[]> {
+export async function loadTags(token: string, dataSourceId: string): Promise<Tag[]> {
   const pages = await paginate<NotionPage>((cursor) =>
     notionFetch(token, `/data_sources/${encodeURIComponent(dataSourceId)}/query`, {
       method: "POST",
@@ -143,12 +149,12 @@ async function createTagPage(token: string, dataSourceId: string, titleName: str
 }
 
 function findTag(tags: Tag[], name: string): Tag | undefined {
-  const key = tagMatchKey(name);
-  return tags.find((tag) => tagMatchKey(tag.name) === key);
+  const key = matchKey(name);
+  return tags.find((tag) => matchKey(tag.name) === key);
 }
 
-function tagMatchKey(name: string): string {
-  return name.normalize("NFKC").toLowerCase();
+export function matchKey(value: string): string {
+  return value.normalize("NFKC").toLowerCase();
 }
 
 function tagName(properties: Record<string, NotionProperty>): string {
