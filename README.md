@@ -6,13 +6,14 @@ Notion のデータベースにブックマークを保存し、タイトルと 
 
 ### 1. Bookmark用のデータベースを用意する
 
-- Bookmark用のデータベースが必要。1行が1ブックマークになる。
+- Bookmark用のデータベースが必要。1行が1ブックマークになる。用意するのは Name と URL の列だけでよい。Body はページ本文で、列は作らない。
 
   ```mermaid
   erDiagram
       Bookmark {
           Name データベースのタイトル列
           URL 開きたいリンク
+          Body ページ本文
       }
   ```
 
@@ -23,10 +24,12 @@ Notion のデータベースにブックマークを保存し、タイトルと 
       "Tech Bookmark" {
           Name データベースのタイトル列
           URL 開きたいリンク
+          Body ページ本文
       }
       "Work Bookmark" {
           Name データベースのタイトル列
           URL 開きたいリンク
+          Body ページ本文
       }
   ```
 
