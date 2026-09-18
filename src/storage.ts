@@ -3,6 +3,7 @@ import { DataSource } from "./types";
 
 const SELECTED_DATA_SOURCES_KEY = "selected-data-sources";
 const LAST_SAVED_DATA_SOURCE_ID_KEY = "last-saved-data-source-id";
+const SAVE_CLIP_ENABLED_KEY = "save-clip-enabled";
 const DATA_SOURCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function loadSelectedDataSources(): Promise<DataSource[]> {
@@ -39,6 +40,24 @@ export async function saveLastSavedDataSourceId(id: string): Promise<void> {
     return;
   }
   await LocalStorage.setItem(LAST_SAVED_DATA_SOURCE_ID_KEY, trimmed);
+}
+
+export async function loadSaveClipEnabled(): Promise<boolean> {
+  const raw = await LocalStorage.getItem(SAVE_CLIP_ENABLED_KEY);
+  return parseSaveClipEnabled(raw) ?? true;
+}
+
+export async function saveSaveClipEnabled(enabled: boolean): Promise<void> {
+  await LocalStorage.setItem(SAVE_CLIP_ENABLED_KEY, enabled ? "true" : "false");
+}
+
+function parseSaveClipEnabled(value: unknown): boolean | undefined {
+  if (value === true || value === "true" || value === 1 || value === "1") {
+    return true;
+  }
+  if (value === false || value === "false" || value === 0 || value === "0") {
+    return false;
+  }
 }
 
 function isStoredDataSource(value: unknown): value is { id: string; title: string } {

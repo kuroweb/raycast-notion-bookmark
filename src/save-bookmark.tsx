@@ -22,13 +22,20 @@ import { useState } from "react";
 import { URL } from "node:url";
 import { MAX_CLIP_CHARS, htmlToMarkdown, toMarkdown } from "./clip";
 import { createBookmark, findBookmarksByUrl, parseHttpUrl } from "./notion";
-import { loadLastSavedDataSourceId, loadSelectedDataSources, saveLastSavedDataSourceId } from "./storage";
+import {
+  loadLastSavedDataSourceId,
+  loadSaveClipEnabled,
+  loadSelectedDataSources,
+  saveLastSavedDataSourceId,
+  saveSaveClipEnabled,
+} from "./storage";
 import { DataSource } from "./types";
 
 type FormValues = {
   title?: string;
   url?: string;
   dataSourceId?: string;
+  saveClip?: boolean;
   clip?: string;
 };
 
@@ -36,6 +43,7 @@ type FormDefaults = {
   title: string;
   url: string;
   clip: string;
+  saveClip: boolean;
   dataSourceId: string;
   dataSources: DataSource[];
 };
@@ -45,10 +53,13 @@ export default function SaveBookmark(props: LaunchProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [urlValue, setUrlValue] = useState<string | null>(null);
   const [dataSourceIdValue, setDataSourceIdValue] = useState<string | null>(null);
+  const [saveClipValue, setSaveClipValue] = useState<boolean | null>(null);
+  const [clipValue, setClipValue] = useState<string | null>(null);
   const { data, isLoading, error } = usePromise(loadFormDefaults, [props.fallbackText]);
   const dataSources = data?.dataSources ?? [];
   const urlForLookup = urlValue ?? data?.url ?? "";
   const selectedDataSourceId = dataSourceIdValue ?? data?.dataSourceId ?? "";
+  const saveClipEnabled = saveClipValue ?? data?.saveClip ?? true;
   const { data: existing = [] } = usePromise(
     async (token: string, sources: DataSource[], url: string) => findBookmarksByUrl(token, sources, url),
     [notionToken.trim(), dataSources, urlForLookup],
@@ -56,6 +67,21 @@ export default function SaveBookmark(props: LaunchProps) {
   );
   const existingInTarget =
     existing.find((bookmark) => bookmark.dataSourceId === selectedDataSourceId) ?? existing[0] ?? null;
+
+  function handleSaveClipChange(enabled: boolean) {
+    setSaveClipValue(enabled);
+    saveSaveClipEnabled(enabled).catch(() => undefined);
+    if (!enabled || (clipValue ?? data?.clip ?? "").length > 0) {
+      return;
+    }
+    readPageClip()
+      .then((clip) => {
+        if (clip) {
+          setClipValue(clip);
+        }
+      })
+      .catch(() => undefined);
+  }
 
   async function save(values: FormValues) {
     if (isLoading || isSaving || error) {
@@ -92,11 +118,13 @@ export default function SaveBookmark(props: LaunchProps) {
       const duplicates = await findBookmarksByUrl(notionToken.trim(), dataSources, url);
       const alreadySaved = duplicates.find((bookmark) => bookmark.dataSourceId === dataSource.id);
       await saveLastSavedDataSourceId(dataSource.id);
+      const saveClip = saveClipEnabled;
+      await saveSaveClipEnabled(saveClip);
       if (alreadySaved) {
         hud = `Already saved in ${dataSource.title}`;
       } else {
-        const clip = toMarkdown(values.clip?.trim() || (await readPageClip()), url);
-        await createBookmark(notionToken.trim(), dataSource.id, title, url, clip || undefined);
+        const clip = saveClip ? toMarkdown(values.clip?.trim() || (await readPageClip()), url) || undefined : undefined;
+        await createBookmark(notionToken.trim(), dataSource.id, title, url, clip);
         hud = `Saved to ${dataSource.title}`;
       }
     } catch (saveError) {
@@ -182,11 +210,18 @@ export default function SaveBookmark(props: LaunchProps) {
               <Form.Dropdown.Item key={dataSource.id} value={dataSource.id} title={dataSource.title} />
             ))}
           </Form.Dropdown>
+          <Form.Checkbox
+            id="saveClip"
+            title="Page clip"
+            label="Save page clip"
+            value={saveClipEnabled}
+            onChange={handleSaveClipChange}
+          />
           <Form.TextArea
             id="clip"
-            title="Page clip"
             placeholder="Selected text or page content. Requires the Raycast browser extension."
-            defaultValue={data?.clip}
+            value={clipValue ?? data?.clip ?? ""}
+            onChange={setClipValue}
           />
         </>
       ) : null}
@@ -196,7 +231,7 @@ export default function SaveBookmark(props: LaunchProps) {
 
 async function loadFormDefaults(fallbackText: string | undefined): Promise<FormDefaults> {
   const dataSources = await loadSelectedDataSources();
-  const lastId = await loadLastSavedDataSourceId();
+  const [lastId, saveClip] = await Promise.all([loadLastSavedDataSourceId(), loadSaveClipEnabled()]);
   const dataSourceId = preferredDataSourceId(dataSources, lastId ?? undefined) ?? dataSources[0]?.id ?? "";
   const fallbackUrl = parseHttpUrl(fallbackText);
   if (fallbackUrl) {
@@ -205,7 +240,8 @@ async function loadFormDefaults(fallbackText: string | undefined): Promise<FormD
       return {
         title: tab.title,
         url: fallbackUrl,
-        clip: await readPageClip(tab.id, tab.url),
+        clip: saveClip ? await readPageClip(tab.id, tab.url) : "",
+        saveClip,
         dataSourceId,
         dataSources,
       };
@@ -215,6 +251,7 @@ async function loadFormDefaults(fallbackText: string | undefined): Promise<FormD
       title: "",
       url: fallbackUrl,
       clip: "",
+      saveClip,
       dataSourceId,
       dataSources,
     };
@@ -226,7 +263,8 @@ async function loadFormDefaults(fallbackText: string | undefined): Promise<FormD
     return {
       title: fallbackTitle || tab.title,
       url: tab.url,
-      clip: await readPageClip(tab.id, tab.url),
+      clip: saveClip ? await readPageClip(tab.id, tab.url) : "",
+      saveClip,
       dataSourceId,
       dataSources,
     };
@@ -234,13 +272,14 @@ async function loadFormDefaults(fallbackText: string | undefined): Promise<FormD
 
   const clipboardUrl = parseHttpUrl(await Clipboard.readText());
   if (clipboardUrl) {
-    return { title: fallbackTitle, url: clipboardUrl, clip: "", dataSourceId, dataSources };
+    return { title: fallbackTitle, url: clipboardUrl, clip: "", saveClip, dataSourceId, dataSources };
   }
 
   return {
     title: fallbackTitle,
     url: "",
     clip: "",
+    saveClip,
     dataSourceId,
     dataSources,
   };
