@@ -11,15 +11,15 @@ import {
 } from "@raycast/api";
 import { getFavicon, showFailureToast, useCachedPromise, usePromise } from "@raycast/utils";
 import { useMemo, useState } from "react";
-import { URL } from "node:url";
-import { loadBookmarks } from "./notion";
+import { hostname } from "./bookmark/url";
+import { loadBookmarks } from "./notion/bookmarks";
 import { loadSelectedDataSources } from "./storage";
 import { Bookmark } from "./types";
 
 const ALL_DATA_SOURCES = "all";
 
 export default function SearchBookmarks() {
-  const { notionToken } = getPreferenceValues<Preferences>();
+  const token = getPreferenceValues<Preferences>().notionToken.trim();
   const [query, setQuery] = useState("");
   const [dataSourceId, setDataSourceId] = useState(ALL_DATA_SOURCES);
   const {
@@ -32,11 +32,7 @@ export default function SearchBookmarks() {
     isLoading: isLoadingBookmarks,
     error: bookmarksError,
     revalidate,
-  } = useCachedPromise(
-    async (token: string, sources: typeof selected) => loadBookmarks(token.trim(), sources),
-    [notionToken, selected],
-    { execute: selected.length > 0 },
-  );
+  } = useCachedPromise(loadBookmarks, [token, selected], { execute: selected.length > 0 });
 
   const error = selectionError ?? bookmarksError;
   const filtered = useMemo(() => filterBookmarks(bookmarks, query, dataSourceId), [bookmarks, query, dataSourceId]);
@@ -175,12 +171,4 @@ function filterBookmarks(bookmarks: Bookmark[], query: string, dataSourceId: str
   }
 
   return scoped.filter((bookmark) => bookmark.searchText.includes(normalized));
-}
-
-function hostname(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
 }

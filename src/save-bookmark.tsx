@@ -1,7 +1,6 @@
 import {
   Action,
   ActionPanel,
-  BrowserExtension,
   Clipboard,
   Form,
   Icon,
@@ -11,7 +10,6 @@ import {
   Toast,
   closeMainWindow,
   getPreferenceValues,
-  getSelectedText,
   launchCommand,
   openExtensionPreferences,
   showHUD,
@@ -19,9 +17,10 @@ import {
 } from "@raycast/api";
 import { showFailureToast, usePromise } from "@raycast/utils";
 import { useState } from "react";
-import { URL } from "node:url";
-import { MAX_CLIP_CHARS, htmlToMarkdown, toMarkdown } from "./clip";
-import { createBookmark, findBookmarksByUrl, parseHttpUrl } from "./notion";
+import { hostname, parseHttpUrl } from "./bookmark/url";
+import { readActiveTab, readPageClip } from "./clip/capture";
+import { prepareClip, toMarkdown } from "./clip/markdown";
+import { createBookmark, findBookmarksByUrl } from "./notion/bookmarks";
 import {
   loadLastSavedDataSourceId,
   loadSaveClipEnabled,
@@ -49,7 +48,7 @@ type FormDefaults = {
 };
 
 export default function SaveBookmark(props: LaunchProps) {
-  const { notionToken } = getPreferenceValues<Preferences>();
+  const token = getPreferenceValues<Preferences>().notionToken.trim();
   const [isSaving, setIsSaving] = useState(false);
   const [urlValue, setUrlValue] = useState<string | null>(null);
   const [dataSourceIdValue, setDataSourceIdValue] = useState<string | null>(null);
@@ -60,11 +59,9 @@ export default function SaveBookmark(props: LaunchProps) {
   const urlForLookup = urlValue ?? data?.url ?? "";
   const selectedDataSourceId = dataSourceIdValue ?? data?.dataSourceId ?? "";
   const saveClipEnabled = saveClipValue ?? data?.saveClip ?? true;
-  const { data: existing = [] } = usePromise(
-    async (token: string, sources: DataSource[], url: string) => findBookmarksByUrl(token, sources, url),
-    [notionToken.trim(), dataSources, urlForLookup],
-    { execute: dataSources.length > 0 && parseHttpUrl(urlForLookup) !== null },
-  );
+  const { data: existing = [] } = usePromise(findBookmarksByUrl, [token, dataSources, urlForLookup], {
+    execute: dataSources.length > 0 && parseHttpUrl(urlForLookup) !== null,
+  });
   const existingInTarget =
     existing.find((bookmark) => bookmark.dataSourceId === selectedDataSourceId) ?? existing[0] ?? null;
 
@@ -111,11 +108,11 @@ export default function SaveBookmark(props: LaunchProps) {
       return;
     }
 
-    const title = values.title?.trim() || titleFromUrl(url);
+    const content = (values.title?.trim() || hostname(url)).slice(0, 2000) || "Untitled";
     setIsSaving(true);
     let hud: string | undefined;
     try {
-      const duplicates = await findBookmarksByUrl(notionToken.trim(), dataSources, url);
+      const duplicates = await findBookmarksByUrl(token, dataSources, url, dataSource.id);
       const alreadySaved = duplicates.find((bookmark) => bookmark.dataSourceId === dataSource.id);
       await saveLastSavedDataSourceId(dataSource.id);
       const saveClip = saveClipEnabled;
@@ -123,8 +120,9 @@ export default function SaveBookmark(props: LaunchProps) {
       if (alreadySaved) {
         hud = `Already saved in ${dataSource.title}`;
       } else {
-        const clip = saveClip ? toMarkdown(values.clip?.trim() || (await readPageClip()), url) || undefined : undefined;
-        await createBookmark(notionToken.trim(), dataSource.id, title, url, clip);
+        const clip = values.clip?.trim() || (await readPageClip());
+        const markdown = saveClip ? prepareClip(toMarkdown(clip, url), content) : "";
+        await createBookmark(token, dataSource.id, content, url, markdown || undefined);
         hud = `Saved to ${dataSource.title}`;
       }
     } catch (saveError) {
@@ -270,7 +268,12 @@ async function loadFormDefaults(fallbackText: string | undefined): Promise<FormD
     };
   }
 
-  const clipboardUrl = parseHttpUrl(await Clipboard.readText());
+  let clipboardUrl: string | null = null;
+  try {
+    clipboardUrl = parseHttpUrl(await Clipboard.readText());
+  } catch {
+    clipboardUrl = null;
+  }
   if (clipboardUrl) {
     return { title: fallbackTitle, url: clipboardUrl, clip: "", saveClip, dataSourceId, dataSources };
   }
@@ -290,64 +293,6 @@ function preferredDataSourceId(dataSources: DataSource[], id: string | undefined
     return undefined;
   }
   return dataSources.some((dataSource) => dataSource.id === id) ? id : undefined;
-}
-
-async function readActiveTab(): Promise<{ id: number; title: string; url: string } | null> {
-  try {
-    const tabs = await BrowserExtension.getTabs();
-    const active = tabs.find((tab) => tab.active);
-    const url = parseHttpUrl(active?.url);
-    if (!active || !url) {
-      return null;
-    }
-    return { id: active.id, title: active.title?.trim() ?? "", url };
-  } catch {
-    return null;
-  }
-}
-
-async function readPageClip(tabId?: number, pageUrl?: string): Promise<string> {
-  try {
-    const html = await BrowserExtension.getContent({
-      format: "html",
-      ...(tabId === undefined ? {} : { tabId }),
-    });
-    const markdown = htmlToMarkdown(html, pageUrl);
-    if (markdown) {
-      return markdown;
-    }
-  } catch {
-    // Raycast browser extension may be missing.
-  }
-
-  try {
-    const selected = (await getSelectedText()).trim();
-    if (selected && !parseHttpUrl(selected)) {
-      return toMarkdown(selected, pageUrl).slice(0, MAX_CLIP_CHARS);
-    }
-  } catch {
-    // No selection in the previous app.
-  }
-
-  try {
-    const text = (
-      await BrowserExtension.getContent({
-        format: "text",
-        ...(tabId === undefined ? {} : { tabId }),
-      })
-    ).trim();
-    return toMarkdown(text, pageUrl).slice(0, MAX_CLIP_CHARS);
-  } catch {
-    return "";
-  }
-}
-
-function titleFromUrl(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "") || url;
-  } catch {
-    return url;
-  }
 }
 
 function savedStatusText(bookmarks: { dataSourceTitle: string }[]): string {

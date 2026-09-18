@@ -9,15 +9,15 @@ import {
   showToast,
 } from "@raycast/api";
 import { showFailureToast, usePromise } from "@raycast/utils";
-import { listAccessibleDataSources } from "./notion";
+import { listAccessibleDataSources } from "./notion/data-sources";
 import { loadSelectedDataSources, saveSelectedDataSources } from "./storage";
 import { DataSource } from "./types";
 
 type FormValues = Record<string, boolean>;
 
 export default function ConfigureDatabases() {
-  const { notionToken } = getPreferenceValues<Preferences>();
-  const { data, isLoading, error, revalidate } = usePromise(loadFormData, [notionToken]);
+  const token = getPreferenceValues<Preferences>().notionToken.trim();
+  const { data, isLoading, error, revalidate } = usePromise(loadFormData, [token]);
   const dataSources = data?.dataSources ?? [];
   const selectedIds = new Set(data?.selected.map((item) => item.id) ?? []);
 
@@ -51,7 +51,7 @@ export default function ConfigureDatabases() {
         <ActionPanel>
           <Action.SubmitForm title="Save Databases" icon={Icon.Check} onSubmit={save} />
           <Action title="Reload Databases" icon={Icon.ArrowClockwise} onAction={() => revalidate()} />
-          <Action title="Open Extension Preferences" icon={Icon.Gear} onAction={openExtensionPreferences} />
+          <Action title="Open Extension Preferences" icon={Icon.Key} onAction={openExtensionPreferences} />
         </ActionPanel>
       }
     >

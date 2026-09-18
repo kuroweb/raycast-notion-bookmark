@@ -21,7 +21,7 @@ turndown.addRule("strikethrough", {
 });
 
 export function prepareClip(markdown: string, title: string): string {
-  const text = toMarkdown(markdown).slice(0, MAX_CLIP_CHARS);
+  const text = markdown.slice(0, MAX_CLIP_CHARS);
   const heading = text.match(/^#\s+(.+?)(?:\n+|$)/);
   if (heading && heading[1].trim() === title.trim()) {
     return text.slice(heading[0].length).trim();
