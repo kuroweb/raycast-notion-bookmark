@@ -71,7 +71,7 @@ export default function SaveBookmark(props: LaunchProps) {
     if (!enabled || (clipValue ?? data?.clip ?? "").length > 0) {
       return;
     }
-    readPageClip()
+    readPageClip(undefined, parseHttpUrl(urlValue ?? data?.url) ?? undefined)
       .then((clip) => {
         if (clip) {
           setClipValue(clip);
@@ -120,7 +120,7 @@ export default function SaveBookmark(props: LaunchProps) {
       if (alreadySaved) {
         hud = `Already saved in ${dataSource.title}`;
       } else {
-        const clip = values.clip?.trim() || (await readPageClip());
+        const clip = values.clip?.trim() || (await readPageClip(undefined, url));
         const markdown = saveClip ? prepareClip(toMarkdown(clip, url), content) : "";
         await createBookmark(token, dataSource.id, content, url, markdown || undefined);
         hud = `Saved to ${dataSource.title}`;

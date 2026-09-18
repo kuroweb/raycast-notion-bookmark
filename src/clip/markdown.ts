@@ -22,9 +22,13 @@ turndown.addRule("strikethrough", {
 
 export function prepareClip(markdown: string, title: string): string {
   const text = markdown.slice(0, MAX_CLIP_CHARS);
-  const heading = text.match(/^#\s+(.+?)(?:\n+|$)/);
+  const cover = text.match(/^!\[[^\]]*\]\([^)]+\)\n*/);
+  const prefix = cover?.[0] ?? "";
+  const rest = text.slice(prefix.length);
+  const heading = rest.match(/^#{1,2}\s+(.+?)(?:\n+|$)/);
   if (heading && heading[1].trim() === title.trim()) {
-    return text.slice(heading[0].length).trim();
+    const stripped = rest.slice(heading[0].length).trim();
+    return [prefix.trim(), stripped].filter(Boolean).join("\n\n");
   }
   return text;
 }
@@ -42,8 +46,10 @@ export function toMarkdown(clip: string, pageUrl?: string): string {
 
 export function htmlToMarkdown(html: string, pageUrl?: string): string {
   const document = parseDocument(html, pageUrl);
+  const coverUrl = coverImageUrl(document, pageUrl);
   const articleHtml = extractArticleHtml(document) || document.body?.innerHTML || html;
-  return normalizeMarkdown(turndown.turndown(articleHtml)).slice(0, MAX_CLIP_CHARS);
+  const markdown = normalizeMarkdown(turndown.turndown(articleHtml));
+  return withLeadingCover(markdown, coverUrl).slice(0, MAX_CLIP_CHARS);
 }
 
 function extractArticleHtml(document: ClipDocument): string {
@@ -63,7 +69,56 @@ function parseDocument(html: string, pageUrl?: string): ClipDocument {
 
 type ClipDocument = {
   body?: { innerHTML?: string };
+  querySelector(selector: string): { getAttribute(name: string): string | null } | null;
 };
+
+const COVER_IMAGE_SELECTORS = [
+  ['meta[property="og:image"]', "content"],
+  ['meta[name="twitter:image"]', "content"],
+  ['link[rel="image_src"]', "href"],
+] as const;
+
+function coverImageUrl(document: ClipDocument, pageUrl?: string): string | null {
+  const base = pageUrl ?? document.querySelector("base")?.getAttribute("href") ?? undefined;
+  for (const [selector, attribute] of COVER_IMAGE_SELECTORS) {
+    const url = absoluteHttpUrl(document.querySelector(selector)?.getAttribute(attribute), base);
+    if (url) {
+      return url;
+    }
+  }
+  return null;
+}
+
+function withLeadingCover(markdown: string, coverUrl: string | null): string {
+  if (!coverUrl) {
+    return markdown;
+  }
+  const image = `![](${coverUrl.replace(/\)/g, "%29")})`;
+  if (markdown.startsWith(image) || leadingMarkdownImageUrl(markdown) === coverUrl) {
+    return markdown;
+  }
+  return markdown ? `${image}\n\n${markdown}` : image;
+}
+
+function leadingMarkdownImageUrl(markdown: string): string | undefined {
+  return markdown.match(/^!\[[^\]]*\]\(([^)]+)\)/)?.[1];
+}
+
+function absoluteHttpUrl(value: string | null | undefined, base?: string): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    const url = new URL(trimmed, base);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return url.href;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 function withBaseUrl(html: string, pageUrl?: string): string {
   if (!pageUrl || /<base\s/i.test(html)) {
