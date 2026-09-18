@@ -21,6 +21,7 @@ import { hostname, parseHttpUrl } from "./bookmark/url";
 import { readActiveTab, readPageClip } from "./clip/capture";
 import { prepareClip, toMarkdown } from "./clip/markdown";
 import { createBookmark, findBookmarksByUrl } from "./notion/bookmarks";
+import { loadTagsForDataSource, parseTagNames } from "./notion/tags";
 import {
   loadLastSavedDataSourceId,
   loadSaveClipEnabled,
@@ -34,6 +35,8 @@ type FormValues = {
   title?: string;
   url?: string;
   dataSourceId?: string;
+  tags?: string[];
+  newTags?: string;
   saveClip?: boolean;
   clip?: string;
 };
@@ -61,6 +64,13 @@ export default function SaveBookmark(props: LaunchProps) {
   const saveClipEnabled = saveClipValue ?? data?.saveClip ?? true;
   const { data: existing = [] } = usePromise(findBookmarksByUrl, [token, dataSources, urlForLookup], {
     execute: dataSources.length > 0 && parseHttpUrl(urlForLookup) !== null,
+  });
+  const {
+    data: tagsData,
+    error: tagsError,
+    isLoading: isLoadingTags,
+  } = usePromise(loadTagsForDataSource, [token, selectedDataSourceId], {
+    execute: selectedDataSourceId.length > 0,
   });
   const existingInTarget =
     existing.find((bookmark) => bookmark.dataSourceId === selectedDataSourceId) ?? existing[0] ?? null;
@@ -122,7 +132,10 @@ export default function SaveBookmark(props: LaunchProps) {
       } else {
         const clip = values.clip?.trim() || (await readPageClip(undefined, url));
         const markdown = saveClip ? prepareClip(toMarkdown(clip, url), content) : "";
-        await createBookmark(token, dataSource.id, content, url, markdown || undefined);
+        await createBookmark(token, dataSource.id, content, url, markdown || undefined, {
+          selectedIds: values.tags ?? [],
+          newNames: parseTagNames(values.newTags),
+        });
         hud = `Saved to ${dataSource.title}`;
       }
     } catch (saveError) {
@@ -208,6 +221,17 @@ export default function SaveBookmark(props: LaunchProps) {
               <Form.Dropdown.Item key={dataSource.id} value={dataSource.id} title={dataSource.title} />
             ))}
           </Form.Dropdown>
+          {tagsError ? <Form.Description title="Tags" text={tagsError.message} /> : null}
+          {tagsData && !isLoadingTags ? (
+            <>
+              <Form.TagPicker key={tagsData.tagsDataSourceId} id="tags" title="Tags" placeholder="Select tags">
+                {tagsData.tags.map((tag) => (
+                  <Form.TagPicker.Item key={tag.id} value={tag.id} title={tag.name} />
+                ))}
+              </Form.TagPicker>
+              <Form.TextField id="newTags" title="New tags" placeholder="Comma-separated names to create" />
+            </>
+          ) : null}
           <Form.Checkbox
             id="saveClip"
             title="Page clip"

@@ -1,6 +1,16 @@
 import { parseHttpUrl, urlEqualsVariants, urlsMatch } from "../bookmark/url";
 import { Bookmark, DataSource } from "../types";
-import { NotionDataSource, NotionPage, NotionProperty, notionFetch, paginate, plainText } from "./client";
+import {
+  NotionDataSource,
+  NotionPage,
+  NotionProperty,
+  notionFetch,
+  paginate,
+  plainText,
+  titlePropertyName,
+  urlPropertyName,
+} from "./client";
+import { TAGS_PROPERTY, resolveTagIds, tagsDataSourceId } from "./tags";
 
 export async function loadBookmarks(token: string, dataSources: DataSource[]): Promise<Bookmark[]> {
   const pages = await Promise.all(dataSources.map((dataSource) => loadDataSourceBookmarks(token, dataSource)));
@@ -13,6 +23,7 @@ export async function createBookmark(
   title: string,
   url: string,
   markdown?: string,
+  tags?: { selectedIds: string[]; newNames: string[] },
 ): Promise<void> {
   const parsedUrl = parseHttpUrl(url);
   if (!parsedUrl) {
@@ -26,22 +37,34 @@ export async function createBookmark(
     throw new Error("This database is in the trash.");
   }
 
-  const properties = dataSource.properties ?? {};
-  const titleName = titlePropertyName(properties);
-  const urlName = urlPropertyName(properties);
+  const schema = dataSource.properties ?? {};
+  const titleName = titlePropertyName(schema);
+  const urlName = urlPropertyName(schema);
   if (!titleName || !urlName) {
     throw new Error("This database needs a title property and a URL property.");
   }
 
   const content = title.trim().slice(0, 2000) || "Untitled";
+  const properties: Record<string, unknown> = {
+    [titleName]: { title: [{ type: "text", text: { content } }] },
+    [urlName]: { url: parsedUrl },
+  };
+
+  const selectedIds = tags?.selectedIds ?? [];
+  const newNames = tags?.newNames ?? [];
+  const relatedId = tagsDataSourceId(schema);
+  if (relatedId && (selectedIds.length > 0 || newNames.length > 0)) {
+    const tagIds = await resolveTagIds(token, relatedId, selectedIds, newNames);
+    if (tagIds.length > 0) {
+      properties[TAGS_PROPERTY] = { relation: tagIds.map((id) => ({ id })) };
+    }
+  }
+
   await notionFetch<NotionPage>(token, "/pages", {
     method: "POST",
     body: JSON.stringify({
       parent: { type: "data_source_id", data_source_id: dataSourceId },
-      properties: {
-        [titleName]: { title: [{ type: "text", text: { content } }] },
-        [urlName]: { url: parsedUrl },
-      },
+      properties,
       ...(markdown ? { markdown } : {}),
     }),
   });
@@ -143,24 +166,4 @@ function pageTitle(properties: Record<string, NotionProperty>): string {
 function pageUrl(properties: Record<string, NotionProperty>): string | null {
   const name = urlPropertyName(properties);
   return name ? parseHttpUrl(properties[name].url) : null;
-}
-
-function titlePropertyName(properties: Record<string, { type: string }>): string | undefined {
-  for (const [name, property] of Object.entries(properties)) {
-    if (property.type === "title") {
-      return name;
-    }
-  }
-}
-
-function urlPropertyName(properties: Record<string, { type: string }>): string | undefined {
-  if (properties.URL?.type === "url") {
-    return "URL";
-  }
-
-  for (const [name, property] of Object.entries(properties)) {
-    if (property.type === "url") {
-      return name;
-    }
-  }
 }

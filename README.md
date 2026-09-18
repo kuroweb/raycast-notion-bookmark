@@ -6,32 +6,24 @@ Notion のデータベースにブックマークを保存し、タイトルと 
 
 ### 1. Bookmark用のデータベースを用意する
 
-- Bookmark用のデータベースが必要。1行が1ブックマークになる。用意するのは Name と URL の列だけでよい。Body はページ本文で、列は作らない。
+- Bookmark用のデータベースが必要。1行が1ブックマークになる。必須なのは Name と URL の列。タグを付けるなら、Tags データベースへの Relation 列 `Tags` も用意する。Body はページ本文で、列は作らない。
 
   ```mermaid
   erDiagram
+      Tags {
+          Name タイトル列
+      }
       Bookmark {
           Name データベースのタイトル列
           URL 開きたいリンク
+          Tags TagsへのRelation
           Body ページ本文
       }
+      Bookmark }o--o{ Tags : Tags
   ```
 
-- Tech Bookmark と Work Bookmark のように分かれていても、まとめて検索できる。
-
-  ```mermaid
-  erDiagram
-      "Tech Bookmark" {
-          Name データベースのタイトル列
-          URL 開きたいリンク
-          Body ページ本文
-      }
-      "Work Bookmark" {
-          Name データベースのタイトル列
-          URL 開きたいリンク
-          Body ページ本文
-      }
-  ```
+- Tags データベースは1つでよい。1行が1タグ。タイトル列は Name。
+- Tech Bookmark と Work Bookmark のように分かれていても、まとめて検索できる。Relation の参照先を同じ Tags にすれば、タグ語彙も共有される。
 
 ### 2. 個人用アクセストークンを発行する
 
@@ -55,6 +47,7 @@ Notion のデータベースにブックマークを保存し、タイトルと 
 ### Save Bookmark: タイトルと URL を保存する
 
 - 開いているブラウザタブ、クリップボードの URL、または手入力から保存する。
+- 保存先に `Tags` Relation があれば、既存タグを選べる。カンマ区切りで新規タグも作れる。Tags データベースにページを作り、ブックマークへ紐づける。
 - ページ本文を保存するかどうか選べる。前回の選択を覚える。
 - 本文を保存するときは、Raycast のブラウザ拡張が入っていれば開いているページを markdown にして Notion のページ本文に入れる。
 - 同じ URL が選んだデータベースにあれば保存済みと出す。同じデータベースへは二重保存しない。

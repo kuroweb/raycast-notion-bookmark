@@ -12,12 +12,19 @@ export type NotionList<T> = {
   next_cursor: string | null;
 };
 
+export type NotionDataSourceProperty = {
+  type: string;
+  relation?: {
+    data_source_id?: string;
+  };
+};
+
 export type NotionDataSource = {
   object: string;
   id: string;
   title?: RichText[];
   in_trash?: boolean;
-  properties?: Record<string, { type: string }>;
+  properties?: Record<string, NotionDataSourceProperty>;
 };
 
 export type NotionPage = {
@@ -74,6 +81,26 @@ export async function notionFetch<T>(token: string, path: string, init: RequestI
 
 export function plainText(items: RichText[] | undefined): string {
   return (items ?? []).map((item) => item.plain_text).join("");
+}
+
+export function titlePropertyName(properties: Record<string, { type: string }>): string | undefined {
+  for (const [name, property] of Object.entries(properties)) {
+    if (property.type === "title") {
+      return name;
+    }
+  }
+}
+
+export function urlPropertyName(properties: Record<string, { type: string }>): string | undefined {
+  if (properties.URL?.type === "url") {
+    return "URL";
+  }
+
+  for (const [name, property] of Object.entries(properties)) {
+    if (property.type === "url") {
+      return name;
+    }
+  }
 }
 
 async function notionErrorMessage(response: Response): Promise<string> {

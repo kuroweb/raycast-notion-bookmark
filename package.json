@@ -29,7 +29,7 @@
       "name": "save-bookmark",
       "title": "Save Bookmark",
       "subtitle": "Notion",
-      "description": "Save a title, URL, and page clip to a selected Notion database.",
+      "description": "Save a title, URL, tags, and page clip to a selected Notion database.",
       "mode": "view",
       "keywords": [
         "notion",
