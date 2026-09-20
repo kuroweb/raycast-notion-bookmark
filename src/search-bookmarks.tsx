@@ -12,6 +12,7 @@ import {
 import { getFavicon, showFailureToast, useCachedPromise, usePromise } from "@raycast/utils";
 import { useMemo, useState } from "react";
 import { hostname } from "./bookmark/url";
+import { EditBookmark } from "./edit-bookmark";
 import { loadBookmarks } from "./notion/bookmarks";
 import { matchKey } from "./notion/tags";
 import { loadSelectedDataSources } from "./storage";
@@ -117,6 +118,12 @@ function BookmarkItem({ bookmark, onReload }: { bookmark: Bookmark; onReload: ()
         <ActionPanel>
           <Action.OpenInBrowser url={openUrl} />
           {bookmark.url ? <Action.OpenInBrowser title="Open in Notion" url={bookmark.notionUrl} /> : null}
+          <Action.Push
+            title="Edit Bookmark"
+            icon={Icon.Pencil}
+            shortcut={Keyboard.Shortcut.Common.Edit}
+            target={<EditBookmark bookmark={bookmark} onSaved={onReload} />}
+          />
           <Action.CopyToClipboard title="Copy URL" content={openUrl} />
           <Action.CopyToClipboard title="Copy Notion URL" content={bookmark.notionUrl} />
           <SaveBookmarkAction />

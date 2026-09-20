@@ -1,4 +1,5 @@
 import { parseHttpUrl, urlEqualsVariants, urlsMatch } from "../bookmark/url";
+import { MAX_CLIP_CHARS } from "../clip/markdown";
 import { Bookmark, DataSource } from "../types";
 import {
   NotionDataSource,
@@ -73,6 +74,104 @@ export async function createBookmark(
       properties,
       ...(markdown ? { markdown } : {}),
     }),
+  });
+}
+
+export async function loadBookmarkForEdit(
+  token: string,
+  pageId: string,
+): Promise<{
+  title: string;
+  url: string | null;
+  tagIds: string[];
+  tagsIncomplete: boolean;
+  markdown: string;
+  clipTooLarge: boolean;
+}> {
+  const [page, clip] = await Promise.all([
+    notionFetch<NotionPage>(token, `/pages/${encodeURIComponent(pageId)}`, { method: "GET" }),
+    loadPageMarkdown(token, pageId),
+  ]);
+  if (page.in_trash) {
+    throw new Error("This bookmark is in the trash.");
+  }
+
+  const markdown = clip.markdown;
+  return {
+    title: pageTitle(page.properties),
+    url: pageUrl(page.properties),
+    tagIds: pageTagIds(page.properties),
+    tagsIncomplete: pageTagsIncomplete(page.properties),
+    markdown,
+    clipTooLarge: clip.truncated || markdown.length > MAX_CLIP_CHARS,
+  };
+}
+
+async function loadPageMarkdown(token: string, pageId: string): Promise<{ markdown: string; truncated: boolean }> {
+  const result = await notionFetch<{ markdown?: string; truncated?: boolean }>(
+    token,
+    `/pages/${encodeURIComponent(pageId)}/markdown`,
+    { method: "GET" },
+  );
+  return {
+    markdown: result.markdown ?? "",
+    truncated: Boolean(result.truncated),
+  };
+}
+
+export async function updateBookmark(
+  token: string,
+  pageId: string,
+  dataSourceId: string,
+  title: string,
+  url: string | null,
+  tags?: { selectedIds: string[]; newNames: string[] },
+  markdown?: string,
+): Promise<void> {
+  const parsedUrl = url === null ? null : parseHttpUrl(url);
+  if (url !== null && !parsedUrl) {
+    throw new Error("URL must start with http:// or https://");
+  }
+
+  const dataSource = await notionFetch<NotionDataSource>(token, `/data_sources/${encodeURIComponent(dataSourceId)}`, {
+    method: "GET",
+  });
+  if (dataSource.in_trash) {
+    throw new Error("This database is in the trash.");
+  }
+
+  const schema = dataSource.properties ?? {};
+  const titleName = titlePropertyName(schema);
+  const urlName = urlPropertyName(schema);
+  if (!titleName || !urlName) {
+    throw new Error("This database needs a title property and a URL property.");
+  }
+
+  const content = title.trim().slice(0, 2000) || "Untitled";
+  const properties: Record<string, unknown> = {
+    [titleName]: { title: [{ type: "text", text: { content } }] },
+    [urlName]: { url: parsedUrl },
+  };
+
+  const relatedId = tagsDataSourceId(schema);
+  if (relatedId && tags) {
+    const tagIds = await resolveTagIds(token, relatedId, tags.selectedIds, tags.newNames);
+    properties[TAGS_PROPERTY] = { relation: tagIds.map((id) => ({ id })) };
+  }
+
+  if (markdown !== undefined) {
+    await notionFetch(token, `/pages/${encodeURIComponent(pageId)}/markdown`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        type: "replace_content",
+        replace_content: { new_str: markdown.slice(0, MAX_CLIP_CHARS) },
+      }),
+    });
+  }
+
+  await notionFetch<NotionPage>(token, `/pages/${encodeURIComponent(pageId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ properties }),
   });
 }
 
@@ -191,6 +290,7 @@ async function findDataSourceBookmarksByUrl(token: string, dataSource: DataSourc
 function toBookmark(page: NotionPage, dataSource: DataSource, tagNames?: Map<string, string>): Bookmark {
   const title = pageTitle(page.properties);
   const url = pageUrl(page.properties);
+  const tagIds = pageTagIds(page.properties);
   const tags = tagNames ? pageTagNames(page.properties, tagNames) : [];
   return {
     id: page.id,
@@ -201,8 +301,23 @@ function toBookmark(page: NotionPage, dataSource: DataSource, tagNames?: Map<str
     dataSourceTitle: dataSource.title,
     lastEditedTime: page.last_edited_time,
     tags,
+    tagIds,
     searchText: matchKey([title, url ?? "", ...tags].join("\n")),
   };
+}
+
+function pageTagIds(properties: Record<string, NotionProperty>): string[] {
+  const property = properties[TAGS_PROPERTY];
+  if (property?.type !== "relation") {
+    return [];
+  }
+
+  return (property.relation ?? []).map((related) => related.id);
+}
+
+function pageTagsIncomplete(properties: Record<string, NotionProperty>): boolean {
+  const property = properties[TAGS_PROPERTY];
+  return property?.type === "relation" && Boolean(property.has_more);
 }
 
 function pageTagNames(properties: Record<string, NotionProperty>, tagNames: Map<string, string>): string[] {

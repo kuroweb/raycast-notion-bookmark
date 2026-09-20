@@ -43,6 +43,7 @@ Notion のデータベースにブックマークを保存し、タイトルと 
 ### Search Bookmarks: ブックマークを検索して開く
 
 - タイトル、URL、タグを横断検索する。Enter でブックマーク先を開く。
+- Edit Bookmark でタイトル、URL、タグ、本文（page clip）を更新できる。データベースは変えられない。
 
 ### Save Bookmark: タイトルと URL を保存する
 

@@ -22,5 +22,6 @@ export type Bookmark = {
   dataSourceTitle: string;
   lastEditedTime: string;
   tags: string[];
+  tagIds: string[];
   searchText: string;
 };
