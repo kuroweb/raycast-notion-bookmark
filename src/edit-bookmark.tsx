@@ -29,7 +29,7 @@ export function EditBookmark({ bookmark, onSaved }: { bookmark: Bookmark; onSave
   });
 
   async function save(values: FormValues) {
-    if (isSaving || isLoading || error || !data) {
+    if (isSaving || isLoading || isLoadingTags || error || !data) {
       await showToast({
         style: Toast.Style.Failure,
         title: "Form is not ready",
@@ -81,7 +81,7 @@ export function EditBookmark({ bookmark, onSaved }: { bookmark: Bookmark; onSave
 
   return (
     <Form
-      isLoading={isSaving || isLoading}
+      isLoading={isSaving || isLoading || isLoadingTags}
       actions={
         <ActionPanel>
           <Action.SubmitForm title="Update Bookmark" icon={Icon.Pencil} onSubmit={save} />
@@ -89,9 +89,9 @@ export function EditBookmark({ bookmark, onSaved }: { bookmark: Bookmark; onSave
       }
     >
       {error ? <Form.Description text={error.message} /> : null}
-      <Form.Description title="Database" text={bookmark.dataSourceTitle} />
-      {data ? (
+      {data && !isLoadingTags ? (
         <>
+          <Form.Description title="Database" text={bookmark.dataSourceTitle} />
           <Form.TextField
             id="url"
             title="URL"
@@ -110,7 +110,7 @@ export function EditBookmark({ bookmark, onSaved }: { bookmark: Bookmark; onSave
             <Form.Description title="Tags" text="This bookmark has too many tags to edit here." />
           ) : null}
           {tagsError ? <Form.Description title="Tags" text={tagsError.message} /> : null}
-          {tagsData && !isLoadingTags && !data.tagsIncomplete ? (
+          {tagsData && !data.tagsIncomplete ? (
             <>
               <Form.TagPicker
                 key={tagsData.tagsDataSourceId}

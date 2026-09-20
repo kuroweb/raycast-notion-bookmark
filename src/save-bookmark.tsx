@@ -16,7 +16,7 @@ import {
   showToast,
 } from "@raycast/api";
 import { showFailureToast, usePromise } from "@raycast/utils";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { hostname, parseHttpUrl } from "./bookmark/url";
 import { readActiveTab, readPageClip } from "./clip/capture";
 import { prepareClip, toMarkdown } from "./clip/markdown";
@@ -57,6 +57,7 @@ export default function SaveBookmark(props: LaunchProps) {
   const [dataSourceIdValue, setDataSourceIdValue] = useState<string | null>(null);
   const [saveClipValue, setSaveClipValue] = useState<boolean | null>(null);
   const [clipValue, setClipValue] = useState<string | null>(null);
+  const revealedFields = useRef(false);
   const { data, isLoading, error } = usePromise(loadFormDefaults, [props.fallbackText]);
   const dataSources = data?.dataSources ?? [];
   const urlForLookup = urlValue ?? data?.url ?? "";
@@ -72,6 +73,10 @@ export default function SaveBookmark(props: LaunchProps) {
   } = usePromise(loadTagsForDataSource, [token, selectedDataSourceId], {
     execute: selectedDataSourceId.length > 0,
   });
+  const tagsPending = selectedDataSourceId.length > 0 && isLoadingTags;
+  if (!error && dataSources.length > 0 && !tagsPending) {
+    revealedFields.current = true;
+  }
   const existingInTarget =
     existing.find((bookmark) => bookmark.dataSourceId === selectedDataSourceId) ?? existing[0] ?? null;
 
@@ -91,7 +96,7 @@ export default function SaveBookmark(props: LaunchProps) {
   }
 
   async function save(values: FormValues) {
-    if (isLoading || isSaving || error) {
+    if (isLoading || isSaving || tagsPending || error) {
       await showToast({
         style: Toast.Style.Failure,
         title: "Form is not ready",
@@ -159,7 +164,7 @@ export default function SaveBookmark(props: LaunchProps) {
 
   return (
     <Form
-      isLoading={isLoading || isSaving}
+      isLoading={isLoading || isSaving || tagsPending}
       actions={
         <ActionPanel>
           <Action.SubmitForm
@@ -189,7 +194,7 @@ export default function SaveBookmark(props: LaunchProps) {
       {!error && !isLoading && dataSources.length === 0 ? (
         <Form.Description text="Open Configure Databases and choose which databases to use." />
       ) : null}
-      {!error && dataSources.length > 0 ? (
+      {!error && dataSources.length > 0 && revealedFields.current ? (
         <>
           <Form.Description title="Status" text={savedStatusText(existing)} />
           <Form.TextField
