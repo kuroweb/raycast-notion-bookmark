@@ -16,6 +16,7 @@ import {
 } from "@raycast/api";
 import { showFailureToast, useCachedPromise, usePromise } from "@raycast/utils";
 import { useMemo, useState } from "react";
+import { EditSnippet } from "./edit-snippet";
 import { loadSnippetMarkdown, loadSnippets } from "./notion/snippets";
 import { matchKey } from "./notion/tags";
 import { loadSelectedSnippetDataSources } from "./storage";
@@ -45,9 +46,10 @@ export default function SearchSnippets() {
   return (
     <List
       isLoading={isLoadingSelection || isLoadingSnippets}
+      isShowingDetail={!error && filtered.length > 0}
       filtering={false}
       onSearchTextChange={setQuery}
-      searchBarPlaceholder="Search title or tag"
+      searchBarPlaceholder="Search title, body, or tag"
       searchBarAccessory={
         selected.length > 0 ? (
           <List.Dropdown tooltip="Database" value={dataSourceId} onChange={setDataSourceId}>
@@ -87,7 +89,7 @@ export default function SearchSnippets() {
         <List.EmptyView
           icon={Icon.MagnifyingGlass}
           title="No results"
-          description="Title and tags were searched."
+          description="Title, body, and tags were searched."
           actions={
             <ActionPanel>
               <SaveSnippetAction />
@@ -106,12 +108,20 @@ export default function SearchSnippets() {
 function SnippetItem({ snippet, token, onReload }: { snippet: Snippet; token: string; onReload: () => void }) {
   return (
     <List.Item
+      id={snippet.id}
       title={snippet.title}
       icon={Icon.Document}
       accessories={[{ tag: snippet.dataSourceTitle }, ...snippet.tags.slice(0, 3).map((name) => ({ tag: name }))]}
+      detail={<List.Item.Detail markdown={previewMarkdown(snippet.body ?? "", snippet.truncated === true)} />}
       actions={
         <ActionPanel>
           <Action title="Paste Snippet" icon={Icon.Clipboard} onAction={() => pasteSnippet(token, snippet.id)} />
+          <Action.Push
+            title="Edit Snippet"
+            icon={Icon.Pencil}
+            shortcut={Keyboard.Shortcut.Common.Edit}
+            target={<EditSnippet snippet={snippet} onSaved={onReload} />}
+          />
           <SaveSnippetAction />
           <Action
             title="Reload"
@@ -126,10 +136,41 @@ function SnippetItem({ snippet, token, onReload }: { snippet: Snippet; token: st
   );
 }
 
+function previewMarkdown(markdown: string, truncated: boolean): string {
+  if (truncated) {
+    const body = markdown.trim().length === 0 ? "" : asPlainPreview(markdown);
+    return body ? `${body}\n\n*Body was truncated.*` : "*Body was truncated.*";
+  }
+  if (markdown.trim().length === 0) {
+    return "*Snippet body is empty*";
+  }
+  return asPlainPreview(markdown);
+}
+
+function asPlainPreview(text: string): string {
+  const fence = codeFence(text);
+  return `${fence}\n${text}\n${fence}`;
+}
+
+function codeFence(text: string): string {
+  let length = 3;
+  for (const match of text.matchAll(/`+/g)) {
+    length = Math.max(length, match[0].length + 1);
+  }
+  return "`".repeat(length);
+}
+
 async function pasteSnippet(token: string, pageId: string) {
   try {
-    const markdown = await loadSnippetMarkdown(token, pageId);
-    if (markdown.trim().length === 0) {
+    const snippet = await loadSnippetMarkdown(token, pageId);
+    if (snippet.truncated) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Snippet body is too large to paste",
+      });
+      return;
+    }
+    if (snippet.body.trim().length === 0) {
       await showToast({
         style: Toast.Style.Failure,
         title: "Snippet body is empty",
@@ -138,7 +179,7 @@ async function pasteSnippet(token: string, pageId: string) {
     }
 
     await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
-    await Clipboard.paste(markdown);
+    await Clipboard.paste(snippet.body);
   } catch (error) {
     await showFailureToast(error, { title: "Could not paste snippet" });
   }

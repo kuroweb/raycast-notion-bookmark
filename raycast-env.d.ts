@@ -22,6 +22,12 @@ declare namespace Preferences {
   export type SaveBookmark = ExtensionPreferences & {}
   /** Preferences accessible in the `configure-databases` command */
   export type ConfigureDatabases = ExtensionPreferences & {}
+  /** Preferences accessible in the `search-snippets` command */
+  export type SearchSnippets = ExtensionPreferences & {}
+  /** Preferences accessible in the `save-snippet` command */
+  export type SaveSnippet = ExtensionPreferences & {}
+  /** Preferences accessible in the `configure-snippet-databases` command */
+  export type ConfigureSnippetDatabases = ExtensionPreferences & {}
 }
 
 declare namespace Arguments {
@@ -31,5 +37,11 @@ declare namespace Arguments {
   export type SaveBookmark = {}
   /** Arguments passed to the `configure-databases` command */
   export type ConfigureDatabases = {}
+  /** Arguments passed to the `search-snippets` command */
+  export type SearchSnippets = {}
+  /** Arguments passed to the `save-snippet` command */
+  export type SaveSnippet = {}
+  /** Arguments passed to the `configure-snippet-databases` command */
+  export type ConfigureSnippetDatabases = {}
 }
 
