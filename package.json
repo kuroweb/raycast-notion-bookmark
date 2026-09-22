@@ -49,6 +49,43 @@
         "database",
         "notion"
       ]
+    },
+    {
+      "name": "search-snippets",
+      "title": "Search Snippets",
+      "subtitle": "Notion",
+      "description": "Search selected Notion snippet databases by title, body, or tag and paste the page body.",
+      "mode": "view",
+      "keywords": [
+        "notion",
+        "snippet"
+      ]
+    },
+    {
+      "name": "save-snippet",
+      "title": "Save Snippet",
+      "subtitle": "Notion",
+      "description": "Save a title, body, and tags to a selected Notion snippet database.",
+      "mode": "view",
+      "keywords": [
+        "notion",
+        "snippet",
+        "save",
+        "add"
+      ]
+    },
+    {
+      "name": "configure-snippet-databases",
+      "title": "Configure Snippet Databases",
+      "subtitle": "Notion",
+      "description": "Choose which Notion snippet databases to search.",
+      "mode": "view",
+      "keywords": [
+        "settings",
+        "database",
+        "notion",
+        "snippet"
+      ]
     }
   ],
   "preferences": [

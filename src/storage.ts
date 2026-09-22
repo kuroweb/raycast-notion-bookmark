@@ -2,31 +2,25 @@ import { LocalStorage } from "@raycast/api";
 import { DataSource } from "./types";
 
 const SELECTED_DATA_SOURCES_KEY = "selected-data-sources";
+const SELECTED_SNIPPET_DATA_SOURCES_KEY = "selected-snippet-data-sources";
 const LAST_SAVED_DATA_SOURCE_ID_KEY = "last-saved-data-source-id";
 const SAVE_CLIP_ENABLED_KEY = "save-clip-enabled";
 const DATA_SOURCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function loadSelectedDataSources(): Promise<DataSource[]> {
-  const raw = await LocalStorage.getItem(SELECTED_DATA_SOURCES_KEY);
-  if (typeof raw !== "string" || raw.length === 0) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed.filter(isStoredDataSource);
-  } catch {
-    return [];
-  }
+  return loadStoredDataSources(SELECTED_DATA_SOURCES_KEY);
 }
 
 export async function saveSelectedDataSources(dataSources: DataSource[]): Promise<void> {
-  const stored = dataSources.map((dataSource) => ({ id: dataSource.id, title: dataSource.title }));
-  await LocalStorage.setItem(SELECTED_DATA_SOURCES_KEY, JSON.stringify(stored));
+  await writeSelectedDataSources(SELECTED_DATA_SOURCES_KEY, dataSources);
+}
+
+export async function loadSelectedSnippetDataSources(): Promise<DataSource[]> {
+  return loadStoredDataSources(SELECTED_SNIPPET_DATA_SOURCES_KEY);
+}
+
+export async function saveSelectedSnippetDataSources(dataSources: DataSource[]): Promise<void> {
+  await writeSelectedDataSources(SELECTED_SNIPPET_DATA_SOURCES_KEY, dataSources);
 }
 
 export async function loadLastSavedDataSourceId(): Promise<string | null> {
@@ -49,6 +43,29 @@ export async function loadSaveClipEnabled(): Promise<boolean> {
 
 export async function saveSaveClipEnabled(enabled: boolean): Promise<void> {
   await LocalStorage.setItem(SAVE_CLIP_ENABLED_KEY, enabled ? "true" : "false");
+}
+
+async function loadStoredDataSources(key: string): Promise<DataSource[]> {
+  const raw = await LocalStorage.getItem(key);
+  if (typeof raw !== "string" || raw.length === 0) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter(isStoredDataSource);
+  } catch {
+    return [];
+  }
+}
+
+async function writeSelectedDataSources(key: string, dataSources: DataSource[]): Promise<void> {
+  const stored = dataSources.map((dataSource) => ({ id: dataSource.id, title: dataSource.title }));
+  await LocalStorage.setItem(key, JSON.stringify(stored));
 }
 
 function parseSaveClipEnabled(value: unknown): boolean | undefined {
