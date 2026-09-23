@@ -1,7 +1,5 @@
-import { parseHttpUrl, urlEqualsVariants, urlsMatch } from "../bookmark/url";
-import { MAX_CLIP_CHARS } from "../clip/markdown";
-import { Bookmark, DataSource } from "../types";
 import {
+  DataSource,
   NotionDataSource,
   NotionPage,
   NotionProperty,
@@ -10,8 +8,11 @@ import {
   plainText,
   titlePropertyName,
   urlPropertyName,
-} from "./client";
-import { TAGS_PROPERTY, loadTags, loadTagsDataSourceId, matchKey, resolveTagIds, tagsDataSourceId } from "./tags";
+} from "../lib/notion-client";
+import { TAGS_PROPERTY, loadTags, loadTagsDataSourceId, matchKey, resolveTagIds, tagsDataSourceId } from "../tags/tags";
+import { MAX_CLIP_CHARS } from "./clip-limit";
+import { Bookmark } from "./types";
+import { parseHttpUrl, urlEqualsVariants, urlsMatch } from "./url";
 
 export async function loadBookmarks(token: string, dataSources: DataSource[]): Promise<Bookmark[]> {
   const [pageGroups, tagNames] = await Promise.all([

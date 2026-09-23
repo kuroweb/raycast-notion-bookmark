@@ -1,4 +1,3 @@
-import { DataSourceTags, Tag } from "../types";
 import {
   NotionDataSource,
   NotionDataSourceProperty,
@@ -8,7 +7,8 @@ import {
   paginate,
   plainText,
   titlePropertyName,
-} from "./client";
+} from "../lib/notion-client";
+import { DataSourceTags, Tag } from "./types";
 
 export const TAGS_PROPERTY = "Tags";
 

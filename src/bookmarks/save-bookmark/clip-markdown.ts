@@ -1,8 +1,7 @@
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
 import TurndownService from "turndown";
-
-export const MAX_CLIP_CHARS = 100_000;
+import { MAX_CLIP_CHARS } from "../clip-limit";
 
 const turndown = new TurndownService({
   headingStyle: "atx",

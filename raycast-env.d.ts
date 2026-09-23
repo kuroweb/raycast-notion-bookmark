@@ -20,8 +20,8 @@ declare namespace Preferences {
   export type SearchBookmarks = ExtensionPreferences & {}
   /** Preferences accessible in the `save-bookmark` command */
   export type SaveBookmark = ExtensionPreferences & {}
-  /** Preferences accessible in the `configure-databases` command */
-  export type ConfigureDatabases = ExtensionPreferences & {}
+  /** Preferences accessible in the `configure-bookmark-databases` command */
+  export type ConfigureBookmarkDatabases = ExtensionPreferences & {}
   /** Preferences accessible in the `search-snippets` command */
   export type SearchSnippets = ExtensionPreferences & {}
   /** Preferences accessible in the `save-snippet` command */
@@ -35,8 +35,8 @@ declare namespace Arguments {
   export type SearchBookmarks = {}
   /** Arguments passed to the `save-bookmark` command */
   export type SaveBookmark = {}
-  /** Arguments passed to the `configure-databases` command */
-  export type ConfigureDatabases = {}
+  /** Arguments passed to the `configure-bookmark-databases` command */
+  export type ConfigureBookmarkDatabases = {}
   /** Arguments passed to the `search-snippets` command */
   export type SearchSnippets = {}
   /** Arguments passed to the `save-snippet` command */

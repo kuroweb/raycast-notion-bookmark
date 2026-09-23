@@ -1,6 +1,7 @@
 import { BrowserExtension, getSelectedText } from "@raycast/api";
-import { parseHttpUrl } from "../bookmark/url";
-import { MAX_CLIP_CHARS, htmlToMarkdown, toMarkdown } from "./markdown";
+import { MAX_CLIP_CHARS } from "../clip-limit";
+import { parseHttpUrl } from "../url";
+import { htmlToMarkdown, toMarkdown } from "./clip-markdown";
 
 export async function readActiveTab(): Promise<{ id: number; title: string; url: string } | null> {
   try {

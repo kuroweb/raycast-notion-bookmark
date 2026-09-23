@@ -27,6 +27,11 @@ export type NotionDataSource = {
   properties?: Record<string, NotionDataSourceProperty>;
 };
 
+export type DataSource = {
+  id: string;
+  title: string;
+};
+
 export type NotionPage = {
   id: string;
   url: string;
@@ -43,6 +48,21 @@ export type NotionProperty = {
   has_more?: boolean;
   relation?: { id: string }[];
 };
+
+export async function searchAccessibleDataSources(token: string): Promise<NotionDataSource[]> {
+  const results = await paginate<NotionDataSource>((cursor) =>
+    notionFetch(token, "/search", {
+      method: "POST",
+      body: JSON.stringify({
+        filter: { property: "object", value: "data_source" },
+        page_size: 100,
+        start_cursor: cursor,
+      }),
+    }),
+  );
+
+  return results.filter((item) => item.object === "data_source" && !item.in_trash);
+}
 
 export async function paginate<T>(fetchPage: (cursor: string | undefined) => Promise<NotionList<T>>): Promise<T[]> {
   const all: T[] = [];

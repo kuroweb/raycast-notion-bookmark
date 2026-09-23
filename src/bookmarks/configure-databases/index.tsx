@@ -9,13 +9,13 @@ import {
   showToast,
 } from "@raycast/api";
 import { showFailureToast, usePromise } from "@raycast/utils";
-import { listAccessibleDataSources } from "./notion/data-sources";
-import { loadSelectedDataSources, saveSelectedDataSources } from "./storage";
-import { DataSource } from "./types";
+import { DataSource } from "../../lib/notion-client";
+import { listAccessibleDataSources } from "../data-sources";
+import { loadSelectedDataSources, saveSelectedDataSources } from "../storage";
 
 type FormValues = Record<string, boolean>;
 
-export default function ConfigureDatabases() {
+export default function ConfigureBookmarkDatabases() {
   const token = getPreferenceValues<Preferences>().notionToken.trim();
   const { data, isLoading, error, revalidate } = usePromise(loadFormData, [token]);
   const dataSources = data?.dataSources ?? [];

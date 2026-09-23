@@ -39,15 +39,16 @@
       ]
     },
     {
-      "name": "configure-databases",
-      "title": "Configure Databases",
+      "name": "configure-bookmark-databases",
+      "title": "Configure Bookmark Databases",
       "subtitle": "Notion",
       "description": "Choose which Notion databases to search.",
       "mode": "view",
       "keywords": [
         "settings",
         "database",
-        "notion"
+        "notion",
+        "bookmark"
       ]
     },
     {

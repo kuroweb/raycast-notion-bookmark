@@ -1,8 +1,7 @@
 import { LocalStorage } from "@raycast/api";
-import { DataSource } from "./types";
+import { DataSource } from "../lib/notion-client";
 
 const SELECTED_DATA_SOURCES_KEY = "selected-data-sources";
-const SELECTED_SNIPPET_DATA_SOURCES_KEY = "selected-snippet-data-sources";
 const LAST_SAVED_DATA_SOURCE_ID_KEY = "last-saved-data-source-id";
 const SAVE_CLIP_ENABLED_KEY = "save-clip-enabled";
 const DATA_SOURCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -13,14 +12,6 @@ export async function loadSelectedDataSources(): Promise<DataSource[]> {
 
 export async function saveSelectedDataSources(dataSources: DataSource[]): Promise<void> {
   await writeSelectedDataSources(SELECTED_DATA_SOURCES_KEY, dataSources);
-}
-
-export async function loadSelectedSnippetDataSources(): Promise<DataSource[]> {
-  return loadStoredDataSources(SELECTED_SNIPPET_DATA_SOURCES_KEY);
-}
-
-export async function saveSelectedSnippetDataSources(dataSources: DataSource[]): Promise<void> {
-  await writeSelectedDataSources(SELECTED_SNIPPET_DATA_SOURCES_KEY, dataSources);
 }
 
 export async function loadLastSavedDataSourceId(): Promise<string | null> {

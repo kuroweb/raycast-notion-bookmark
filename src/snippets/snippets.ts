@@ -1,5 +1,5 @@
-import { DataSource, Snippet } from "../types";
 import {
+  DataSource,
   NotionDataSource,
   NotionPage,
   NotionProperty,
@@ -7,8 +7,9 @@ import {
   paginate,
   plainText,
   titlePropertyName,
-} from "./client";
-import { TAGS_PROPERTY, loadTags, loadTagsDataSourceId, matchKey, resolveTagIds, tagsDataSourceId } from "./tags";
+} from "../lib/notion-client";
+import { TAGS_PROPERTY, loadTags, loadTagsDataSourceId, matchKey, resolveTagIds, tagsDataSourceId } from "../tags/tags";
+import { Snippet } from "./types";
 
 export async function loadSnippets(token: string, dataSources: DataSource[]): Promise<Snippet[]> {
   const [pageGroups, tagNames] = await Promise.all([

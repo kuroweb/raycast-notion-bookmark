@@ -1,31 +1,31 @@
 import { Action, ActionPanel, Form, Icon, Toast, getPreferenceValues, showToast, useNavigation } from "@raycast/api";
 import { showFailureToast, usePromise } from "@raycast/utils";
 import { useState } from "react";
-import { hostname, parseHttpUrl } from "./bookmark/url";
-import { MAX_CLIP_CHARS } from "./clip/markdown";
-import { loadBookmarkForEdit, updateBookmark } from "./notion/bookmarks";
-import { loadTagsForDataSource, parseTagNames } from "./notion/tags";
-import { Bookmark, Tag } from "./types";
+import { loadTagsForDataSource, parseTagNames } from "../../tags/tags";
+import { loadSnippetForEdit, updateSnippet } from "../snippets";
+import { Tag } from "../../tags/types";
+import { Snippet } from "../types";
+
+const UNTITLED = "Untitled";
 
 type FormValues = {
   title?: string;
-  url?: string;
+  body?: string;
   tags?: string[];
   newTags?: string;
-  clip?: string;
 };
 
-export function EditBookmark({ bookmark, onSaved }: { bookmark: Bookmark; onSaved: () => void }) {
+export function EditSnippet({ snippet, onSaved }: { snippet: Snippet; onSaved: () => void }) {
   const token = getPreferenceValues<Preferences>().notionToken.trim();
   const { pop } = useNavigation();
   const [isSaving, setIsSaving] = useState(false);
-  const { data, error, isLoading } = usePromise(loadBookmarkForEdit, [token, bookmark.id]);
+  const { data, error, isLoading } = usePromise(loadSnippetForEdit, [token, snippet.id]);
   const {
     data: tagsData,
     error: tagsError,
     isLoading: isLoadingTags,
-  } = usePromise(loadTagsForDataSource, [token, bookmark.dataSourceId], {
-    execute: bookmark.dataSourceId.length > 0,
+  } = usePromise(loadTagsForDataSource, [token, snippet.dataSourceId], {
+    execute: snippet.dataSourceId.length > 0,
   });
 
   async function save(values: FormValues) {
@@ -38,37 +38,33 @@ export function EditBookmark({ bookmark, onSaved }: { bookmark: Bookmark; onSave
       return;
     }
 
-    const urlInput = values.url?.trim() ?? "";
-    const url = urlInput.length === 0 ? null : parseHttpUrl(urlInput);
-    if (urlInput.length > 0 && !url) {
+    const nextBody = values.body ?? "";
+    if (!data.bodyTooLarge && nextBody.trim().length === 0) {
       await showToast({
         style: Toast.Style.Failure,
-        title: "URL must start with http:// or https://",
+        title: "Snippet body is empty",
       });
       return;
     }
 
-    const content = (values.title?.trim() || (url ? hostname(url) : "")).slice(0, 2000) || "Untitled";
-    const nextClip = values.clip ?? "";
-    const markdown = !data.clipTooLarge && nextClip !== data.markdown ? nextClip.slice(0, MAX_CLIP_CHARS) : undefined;
+    const content = data.bodyTooLarge ? undefined : nextBody;
     setIsSaving(true);
     try {
-      await updateBookmark(
+      await updateSnippet(
         token,
-        bookmark.id,
-        bookmark.dataSourceId,
-        content,
-        url,
+        snippet.id,
+        snippet.dataSourceId,
+        (values.title?.trim() || UNTITLED).slice(0, 2000),
         tagsData && !data.tagsIncomplete
           ? {
               selectedIds: values.tags ?? [],
               newNames: parseTagNames(values.newTags),
             }
           : undefined,
-        markdown,
+        content,
       );
     } catch (saveError) {
-      await showFailureToast(saveError, { title: "Could not update bookmark" });
+      await showFailureToast(saveError, { title: "Could not update snippet" });
       return;
     } finally {
       setIsSaving(false);
@@ -76,7 +72,7 @@ export function EditBookmark({ bookmark, onSaved }: { bookmark: Bookmark; onSave
 
     onSaved();
     pop();
-    await showToast({ style: Toast.Style.Success, title: "Bookmark updated" });
+    await showToast({ style: Toast.Style.Success, title: "Snippet updated" });
   }
 
   return (
@@ -84,30 +80,23 @@ export function EditBookmark({ bookmark, onSaved }: { bookmark: Bookmark; onSave
       isLoading={isSaving || isLoading || isLoadingTags}
       actions={
         <ActionPanel>
-          <Action.SubmitForm title="Update Bookmark" icon={Icon.Pencil} onSubmit={save} />
+          <Action.SubmitForm title="Update Snippet" icon={Icon.Pencil} onSubmit={save} />
         </ActionPanel>
       }
     >
       {error ? <Form.Description text={error.message} /> : null}
       {data && !isLoadingTags ? (
         <>
-          <Form.Description title="Database" text={bookmark.dataSourceTitle} />
-          <Form.TextField
-            id="url"
-            title="URL"
-            placeholder="https://"
-            defaultValue={data.url ?? ""}
-            autoFocus={!data.url}
-          />
+          <Form.Description title="Database" text={snippet.dataSourceTitle} />
           <Form.TextField
             id="title"
             title="Title"
-            placeholder="Page title"
+            placeholder={UNTITLED}
             defaultValue={data.title}
-            autoFocus={Boolean(data.url)}
+            autoFocus={data.bodyTooLarge}
           />
           {data.tagsIncomplete ? (
-            <Form.Description title="Tags" text="This bookmark has too many tags to edit here." />
+            <Form.Description title="Tags" text="This snippet has too many tags to edit here." />
           ) : null}
           {tagsError ? <Form.Description title="Tags" text={tagsError.message} /> : null}
           {tagsData && !data.tagsIncomplete ? (
@@ -126,15 +115,10 @@ export function EditBookmark({ bookmark, onSaved }: { bookmark: Bookmark; onSave
               <Form.TextField id="newTags" title="New tags" placeholder="Comma-separated names to create" />
             </>
           ) : null}
-          {data.clipTooLarge ? (
-            <Form.Description title="Page clip" text="This page's body is too large to edit here." />
+          {data.bodyTooLarge ? (
+            <Form.Description title="Body" text="This snippet's body is too large to edit here." />
           ) : (
-            <Form.TextArea
-              id="clip"
-              title="Page clip"
-              placeholder="Page content saved as markdown."
-              defaultValue={data.markdown}
-            />
+            <Form.TextArea id="body" title="Body" placeholder="Snippet body" defaultValue={data.body} autoFocus />
           )}
         </>
       ) : null}
