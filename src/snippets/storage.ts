@@ -2,6 +2,7 @@ import { LocalStorage } from "@raycast/api";
 import { DataSource } from "../lib/notion-client";
 
 const SELECTED_SNIPPET_DATA_SOURCES_KEY = "selected-snippet-data-sources";
+const LAST_SAVED_SNIPPET_DATA_SOURCE_ID_KEY = "last-saved-snippet-data-source-id";
 const DATA_SOURCE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function loadSelectedSnippetDataSources(): Promise<DataSource[]> {
@@ -10,6 +11,19 @@ export async function loadSelectedSnippetDataSources(): Promise<DataSource[]> {
 
 export async function saveSelectedSnippetDataSources(dataSources: DataSource[]): Promise<void> {
   await writeSelectedDataSources(SELECTED_SNIPPET_DATA_SOURCES_KEY, dataSources);
+}
+
+export async function loadLastSavedSnippetDataSourceId(): Promise<string | null> {
+  const raw = await LocalStorage.getItem(LAST_SAVED_SNIPPET_DATA_SOURCE_ID_KEY);
+  return typeof raw === "string" && raw.length > 0 ? raw : null;
+}
+
+export async function saveLastSavedSnippetDataSourceId(id: string): Promise<void> {
+  const trimmed = id.trim();
+  if (trimmed.length === 0) {
+    return;
+  }
+  await LocalStorage.setItem(LAST_SAVED_SNIPPET_DATA_SOURCE_ID_KEY, trimmed);
 }
 
 async function loadStoredDataSources(key: string): Promise<DataSource[]> {

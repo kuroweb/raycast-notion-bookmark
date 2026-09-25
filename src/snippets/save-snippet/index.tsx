@@ -21,7 +21,11 @@ import { useRef, useState } from "react";
 import { DataSource } from "../../lib/notion-client";
 import { loadTagsForDataSource, parseTagNames } from "../../tags/tags";
 import { createSnippet } from "../snippets";
-import { loadSelectedSnippetDataSources } from "../storage";
+import {
+  loadLastSavedSnippetDataSourceId,
+  loadSelectedSnippetDataSources,
+  saveLastSavedSnippetDataSourceId,
+} from "../storage";
 
 const UNTITLED = "Untitled";
 
@@ -91,6 +95,7 @@ export default function SaveSnippet(props: LaunchProps) {
     const content = (values.title?.trim() || UNTITLED).slice(0, 2000);
     setIsSaving(true);
     try {
+      await saveLastSavedSnippetDataSourceId(dataSource.id);
       await createSnippet(token, dataSource.id, content, body, {
         selectedIds: values.tags ?? [],
         newNames: parseTagNames(values.newTags),
@@ -145,8 +150,10 @@ export default function SaveSnippet(props: LaunchProps) {
             id="dataSourceId"
             title="Database"
             value={selectedDataSourceId}
+            storeValue
             onChange={(id) => {
               setDataSourceIdValue(id);
+              saveLastSavedSnippetDataSourceId(id).catch(() => undefined);
             }}
           >
             {dataSources.map((dataSource) => (
@@ -172,13 +179,21 @@ export default function SaveSnippet(props: LaunchProps) {
 
 async function loadFormDefaults(fallbackText: string | undefined): Promise<FormDefaults> {
   const dataSources = await loadSelectedSnippetDataSources();
-  const dataSourceId = dataSources[0]?.id ?? "";
+  const lastId = await loadLastSavedSnippetDataSourceId();
+  const dataSourceId = preferredDataSourceId(dataSources, lastId ?? undefined) ?? dataSources[0]?.id ?? "";
   return {
     title: UNTITLED,
     body: await readInitialBody(fallbackText),
     dataSourceId,
     dataSources,
   };
+}
+
+function preferredDataSourceId(dataSources: DataSource[], id: string | undefined): string | undefined {
+  if (!id) {
+    return undefined;
+  }
+  return dataSources.some((dataSource) => dataSource.id === id) ? id : undefined;
 }
 
 async function readInitialBody(fallbackText: string | undefined): Promise<string> {
