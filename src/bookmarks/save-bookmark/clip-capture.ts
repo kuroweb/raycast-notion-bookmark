@@ -1,5 +1,5 @@
 import { BrowserExtension, getSelectedText } from "@raycast/api";
-import { MAX_CLIP_CHARS } from "../clip-limit";
+import { truncateClip } from "../clip-limit";
 import { parseHttpUrl } from "../url";
 import { htmlToMarkdown, toMarkdown } from "./clip-markdown";
 
@@ -34,7 +34,7 @@ export async function readPageClip(tabId?: number, pageUrl?: string): Promise<st
   try {
     const selected = (await getSelectedText()).trim();
     if (selected && !parseHttpUrl(selected)) {
-      return toMarkdown(selected, pageUrl).slice(0, MAX_CLIP_CHARS);
+      return truncateClip(toMarkdown(selected, pageUrl));
     }
   } catch {
     // No selection in the previous app.
@@ -47,7 +47,7 @@ export async function readPageClip(tabId?: number, pageUrl?: string): Promise<st
         ...(tabId === undefined ? {} : { tabId }),
       })
     ).trim();
-    return toMarkdown(text, pageUrl).slice(0, MAX_CLIP_CHARS);
+    return truncateClip(toMarkdown(text, pageUrl));
   } catch {
     return "";
   }

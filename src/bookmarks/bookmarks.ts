@@ -10,7 +10,7 @@ import {
   urlPropertyName,
 } from "../lib/notion-client";
 import { TAGS_PROPERTY, loadTags, loadTagsDataSourceId, matchKey, resolveTagIds, tagsDataSourceId } from "../tags/tags";
-import { MAX_CLIP_CHARS } from "./clip-limit";
+import { MAX_CLIP_CHARS, truncateClip } from "./clip-limit";
 import { Bookmark } from "./types";
 import { parseHttpUrl, urlEqualsVariants, urlsMatch } from "./url";
 
@@ -165,7 +165,7 @@ export async function updateBookmark(
       method: "PATCH",
       body: JSON.stringify({
         type: "replace_content",
-        replace_content: { new_str: markdown.slice(0, MAX_CLIP_CHARS) },
+        replace_content: { new_str: truncateClip(markdown) },
       }),
     });
   }

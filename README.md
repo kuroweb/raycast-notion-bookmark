@@ -72,3 +72,13 @@ Raycast を開くと、開発中の拡張がルート検索に出る。
 npm run lint
 npm run build
 ```
+
+ユニットテストは `tests/` にあり、`src/` と同じ構成で並べる。Raycast と Notion API は
+`tests/support/` のモックへ差し替えるので、テスト実行に Raycast もトークンも要らない。
+コマンドの UI（`*.tsx`）はテスト対象外で、判定ロジックは `form.ts` などへ切り出してテストする。
+
+```bash
+npm run test
+npm run test:watch
+npm run typecheck
+```

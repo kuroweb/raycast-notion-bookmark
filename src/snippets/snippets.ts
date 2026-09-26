@@ -314,7 +314,7 @@ function pageTitle(properties: Record<string, NotionProperty>): string {
   return name ? plainText(properties[name].title) || "Untitled" : "Untitled";
 }
 
-function toSnippetBody(markdown: string): string {
+export function toSnippetBody(markdown: string): string {
   const text = trimEdgeEmptyBlocks(markdown.split("\n")).join("\n");
   return unwrapWrappingCodeFence(text) ?? text;
 }
@@ -335,7 +335,7 @@ function isEdgeBlank(line: string): boolean {
   return line === "" || isEmptyBlock(line);
 }
 
-function wrapCodeBlock(body: string): string {
+export function wrapCodeBlock(body: string): string {
   const fence = codeFenceFor(body);
   return `${fence}plain text\n${body}\n${fence}`;
 }
@@ -356,7 +356,7 @@ function isEmptyBlock(line: string): boolean {
 }
 
 function unwrapWrappingCodeFence(text: string): string | undefined {
-  const open = /^[ \t]*(?<fence>`{3,})[^\n]*\n/.exec(text);
+  const open = /^[ \t]{0,3}(?<fence>`{3,})[^\n]*\n/.exec(text);
   const fence = open?.groups?.fence;
   if (!open || !fence) {
     return undefined;

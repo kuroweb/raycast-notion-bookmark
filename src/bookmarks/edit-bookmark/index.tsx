@@ -1,20 +1,10 @@
 import { Action, ActionPanel, Form, Icon, Toast, getPreferenceValues, showToast, useNavigation } from "@raycast/api";
 import { showFailureToast, usePromise } from "@raycast/utils";
 import { useState } from "react";
-import { loadTagsForDataSource, parseTagNames } from "../../tags/tags";
+import { loadTagsForDataSource, selectedTagIds } from "../../tags/tags";
 import { loadBookmarkForEdit, updateBookmark } from "../bookmarks";
-import { Tag } from "../../tags/types";
-import { MAX_CLIP_CHARS } from "../clip-limit";
 import { Bookmark } from "../types";
-import { hostname, parseHttpUrl } from "../url";
-
-type FormValues = {
-  title?: string;
-  url?: string;
-  tags?: string[];
-  newTags?: string;
-  clip?: string;
-};
+import { BookmarkFormValues, resolveBookmarkEdit } from "./form";
 
 export function EditBookmark({ bookmark, onSaved }: { bookmark: Bookmark; onSaved: () => void }) {
   const token = getPreferenceValues<Preferences>().notionToken.trim();
@@ -29,7 +19,7 @@ export function EditBookmark({ bookmark, onSaved }: { bookmark: Bookmark; onSave
     execute: bookmark.dataSourceId.length > 0,
   });
 
-  async function save(values: FormValues) {
+  async function save(values: BookmarkFormValues) {
     if (isSaving || isLoading || isLoadingTags || error || !data) {
       await showToast({
         style: Toast.Style.Failure,
@@ -39,35 +29,16 @@ export function EditBookmark({ bookmark, onSaved }: { bookmark: Bookmark; onSave
       return;
     }
 
-    const urlInput = values.url?.trim() ?? "";
-    const url = urlInput.length === 0 ? null : parseHttpUrl(urlInput);
-    if (urlInput.length > 0 && !url) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "URL must start with http:// or https://",
-      });
+    const resolved = resolveBookmarkEdit(values, data, Boolean(tagsData));
+    if ("error" in resolved) {
+      await showToast({ style: Toast.Style.Failure, title: resolved.error });
       return;
     }
 
-    const content = (values.title?.trim() || (url ? hostname(url) : "")).slice(0, 2000) || "Untitled";
-    const nextClip = values.clip ?? "";
-    const markdown = !data.clipTooLarge && nextClip !== data.markdown ? nextClip.slice(0, MAX_CLIP_CHARS) : undefined;
+    const { title, url, tags, markdown } = resolved.edit;
     setIsSaving(true);
     try {
-      await updateBookmark(
-        token,
-        bookmark.id,
-        bookmark.dataSourceId,
-        content,
-        url,
-        tagsData && !data.tagsIncomplete
-          ? {
-              selectedIds: values.tags ?? [],
-              newNames: parseTagNames(values.newTags),
-            }
-          : undefined,
-        markdown,
-      );
+      await updateBookmark(token, bookmark.id, bookmark.dataSourceId, title, url, tags, markdown);
     } catch (saveError) {
       await showFailureToast(saveError, { title: "Could not update bookmark" });
       return;
@@ -141,9 +112,4 @@ export function EditBookmark({ bookmark, onSaved }: { bookmark: Bookmark; onSave
       ) : null}
     </Form>
   );
-}
-
-function selectedTagIds(tagIds: string[], tags: Tag[]): string[] {
-  const available = new Set(tags.map((tag) => tag.id));
-  return tagIds.filter((id) => available.has(id));
 }

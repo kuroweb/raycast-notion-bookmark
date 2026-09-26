@@ -153,6 +153,11 @@ function findTag(tags: Tag[], name: string): Tag | undefined {
   return tags.find((tag) => matchKey(tag.name) === key);
 }
 
+export function selectedTagIds(tagIds: string[], tags: Tag[]): string[] {
+  const available = new Set(tags.map((tag) => tag.id));
+  return tagIds.filter((id) => available.has(id));
+}
+
 export function matchKey(value: string): string {
   return value.normalize("NFKC").toLowerCase();
 }
