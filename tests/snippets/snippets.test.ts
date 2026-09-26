@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   createSnippet,
   loadSnippetForEdit,
@@ -8,6 +8,7 @@ import {
   updateSnippet,
   wrapCodeBlock,
 } from "../../src/snippets/snippets";
+import { clearCaches } from "../support/cache";
 import { notionList, stubNotionFetch } from "../support/notion-fetch";
 
 const dataSource = { id: "ds-1", title: "Snippets" };
@@ -79,6 +80,8 @@ describe("wrapCodeBlock", () => {
 });
 
 describe("loadSnippets", () => {
+  beforeEach(clearCaches);
+
   it("本文を取得し、最終更新の新しい順に並べる", async () => {
     stubNotionFetch((request) => {
       if (request.path === "/data_sources/ds-1/query") {
@@ -99,6 +102,46 @@ describe("loadSnippets", () => {
     expect(snippets[0].body).toBe("body");
   });
 
+  it("last_edited_time が同じなら本文を取り直さない", async () => {
+    const stubbed = stubNotionFetch((request) => {
+      if (request.path === "/data_sources/ds-1/query") {
+        return notionList([snippetPage("1", "Title")]);
+      }
+      if (request.path.endsWith("/markdown")) {
+        return { body: { markdown: "```plain text\nbody\n```" } };
+      }
+      return { body: { id: "ds-1", properties: { Name: { type: "title" } } } };
+    });
+
+    await loadSnippets("token", [dataSource]);
+    const [snippet] = await loadSnippets("token", [dataSource]);
+
+    expect(snippet.body).toBe("body");
+    expect(stubbed.requests.filter((request) => request.path.endsWith("/markdown"))).toHaveLength(1);
+  });
+
+  it("last_edited_time が変われば本文を取り直す", async () => {
+    let lastEditedTime = "2026-01-01T00:00:00.000Z";
+    let markdown = "```plain text\nold\n```";
+    const stubbed = stubNotionFetch((request) => {
+      if (request.path === "/data_sources/ds-1/query") {
+        return notionList([snippetPage("1", "Title", { last_edited_time: lastEditedTime })]);
+      }
+      if (request.path.endsWith("/markdown")) {
+        return { body: { markdown } };
+      }
+      return { body: { id: "ds-1", properties: { Name: { type: "title" } } } };
+    });
+
+    await loadSnippets("token", [dataSource]);
+    lastEditedTime = "2026-02-01T00:00:00.000Z";
+    markdown = "```plain text\nnew\n```";
+    const [snippet] = await loadSnippets("token", [dataSource]);
+
+    expect(snippet.body).toBe("new");
+    expect(stubbed.requests.filter((request) => request.path.endsWith("/markdown"))).toHaveLength(2);
+  });
+
   it("本文の取得に失敗したスニペットは空の本文で返す", async () => {
     stubNotionFetch((request) => {
       if (request.path === "/data_sources/ds-1/query") {
@@ -112,6 +155,26 @@ describe("loadSnippets", () => {
 
     const [snippet] = await loadSnippets("token", [dataSource]);
     expect(snippet).toMatchObject({ body: "", truncated: false });
+  });
+
+  it("取得に失敗した本文はキャッシュせず、次回に取り直す", async () => {
+    let failing = true;
+    const stubbed = stubNotionFetch((request) => {
+      if (request.path === "/data_sources/ds-1/query") {
+        return notionList([snippetPage("1", "Title")]);
+      }
+      if (request.path.endsWith("/markdown")) {
+        return failing ? { status: 403, body: { message: "No access" } } : { body: { markdown: "body" } };
+      }
+      return { body: { id: "ds-1", properties: { Name: { type: "title" } } } };
+    });
+
+    await loadSnippets("token", [dataSource]);
+    failing = false;
+    const [snippet] = await loadSnippets("token", [dataSource]);
+
+    expect(snippet.body).toBe("body");
+    expect(stubbed.requests.filter((request) => request.path.endsWith("/markdown"))).toHaveLength(2);
   });
 });
 

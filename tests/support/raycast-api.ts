@@ -4,3 +4,4 @@
  */
 export { localStorageMock as LocalStorage } from "./local-storage";
 export { browserExtensionMock as BrowserExtension, getSelectedTextMock as getSelectedText } from "./browser-extension";
+export { CacheMock as Cache } from "./cache";
