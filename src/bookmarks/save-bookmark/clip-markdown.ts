@@ -1,7 +1,7 @@
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
 import TurndownService from "turndown";
-import { MAX_CLIP_CHARS } from "../clip-limit";
+import { truncateClip } from "../clip-limit";
 
 const turndown = new TurndownService({
   headingStyle: "atx",
@@ -20,7 +20,7 @@ turndown.addRule("strikethrough", {
 });
 
 export function prepareClip(markdown: string, title: string): string {
-  const text = markdown.slice(0, MAX_CLIP_CHARS);
+  const text = truncateClip(markdown);
   const cover = text.match(/^!\[[^\]]*\]\([^)]+\)\n*/);
   const prefix = cover?.[0] ?? "";
   const rest = text.slice(prefix.length);
@@ -48,7 +48,7 @@ export function htmlToMarkdown(html: string, pageUrl?: string): string {
   const coverUrl = coverImageUrl(document, pageUrl);
   const articleHtml = extractArticleHtml(document) || document.body?.innerHTML || html;
   const markdown = normalizeMarkdown(turndown.turndown(articleHtml));
-  return withLeadingCover(markdown, coverUrl).slice(0, MAX_CLIP_CHARS);
+  return truncateClip(withLeadingCover(markdown, coverUrl));
 }
 
 function extractArticleHtml(document: ClipDocument): string {

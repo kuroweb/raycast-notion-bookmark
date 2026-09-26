@@ -356,7 +356,7 @@ function isEmptyBlock(line: string): boolean {
 }
 
 function unwrapWrappingCodeFence(text: string): string | undefined {
-  const open = /^[ \t]*(?<fence>`{3,})[^\n]*\n/.exec(text);
+  const open = /^[ \t]{0,3}(?<fence>`{3,})[^\n]*\n/.exec(text);
   const fence = open?.groups?.fence;
   if (!open || !fence) {
     return undefined;
