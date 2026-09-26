@@ -9,6 +9,7 @@ import {
   titlePropertyName,
 } from "../lib/notion-client";
 import { TAGS_PROPERTY, loadTags, loadTagsDataSourceId, matchKey, resolveTagIds, tagsDataSourceId } from "../tags/tags";
+import { SnippetBody, cachedSnippetBody, storeSnippetBody } from "./body-cache";
 import { Snippet } from "./types";
 
 export async function loadSnippets(token: string, dataSources: DataSource[]): Promise<Snippet[]> {
@@ -18,7 +19,7 @@ export async function loadSnippets(token: string, dataSources: DataSource[]): Pr
   ]);
 
   const pages = pageGroups.flatMap(({ dataSource, pages }) => pages.map((page) => ({ dataSource, page })));
-  const bodies = await mapWithLimit(pages, 4, ({ page }) => loadSnippetBody(token, page.id));
+  const bodies = await mapWithLimit(pages, 4, ({ page }) => loadCachedSnippetBody(token, page));
   return pages
     .map(({ dataSource, page }, index) => toSnippet(page, dataSource, tagNames, bodies[index]))
     .sort((a, b) => b.lastEditedTime.localeCompare(a.lastEditedTime));
@@ -84,10 +85,18 @@ export async function loadSnippetMarkdown(
   };
 }
 
-async function loadSnippetBody(token: string, pageId: string): Promise<{ body: string; truncated: boolean }> {
+async function loadCachedSnippetBody(token: string, page: NotionPage): Promise<SnippetBody> {
+  const cached = cachedSnippetBody(page.id, page.last_edited_time);
+  if (cached) {
+    return cached;
+  }
+
   try {
-    return await loadSnippetMarkdown(token, pageId);
+    const loaded = await loadSnippetMarkdown(token, page.id);
+    storeSnippetBody(page.id, page.last_edited_time, loaded);
+    return loaded;
   } catch {
+    // 取得できなかった本文はキャッシュしない。次回また取りに行く。
     return { body: "", truncated: false };
   }
 }
