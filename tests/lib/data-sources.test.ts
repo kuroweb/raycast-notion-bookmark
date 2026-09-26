@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { preferredDataSourceId } from "../../src/lib/data-sources";
+import { dataSourceOptions, preferredDataSourceId } from "../../src/lib/data-sources";
 
 const dataSources = [
   { id: "ds-1", title: "Tech" },
@@ -18,5 +18,22 @@ describe("preferredDataSourceId", () => {
 
   it("前回の保存先がなければ undefined", () => {
     expect(preferredDataSourceId(dataSources, undefined)).toBeUndefined();
+  });
+});
+
+describe("dataSourceOptions", () => {
+  it("現在の保存先が選択中にあればそのまま返す", () => {
+    expect(dataSourceOptions(dataSources, { id: "ds-2", title: "Work" })).toEqual(dataSources);
+  });
+
+  it("選択から外れた保存先は末尾に足して選べるようにする", () => {
+    expect(dataSourceOptions(dataSources, { id: "ds-9", title: "Old" })).toEqual([
+      ...dataSources,
+      { id: "ds-9", title: "Old" },
+    ]);
+  });
+
+  it("保存先が空なら足さない", () => {
+    expect(dataSourceOptions(dataSources, { id: "", title: "" })).toEqual(dataSources);
   });
 });

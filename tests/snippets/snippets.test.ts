@@ -253,13 +253,15 @@ describe("loadSnippetForEdit", () => {
   });
 });
 
+const update = { pageId: "1", fromDataSourceId: "ds-1", dataSourceId: "ds-1", title: "Title" };
+
 describe("updateSnippet", () => {
   it("本文をコードブロックで包んで replace_content で送る", async () => {
     const stubbed = stubNotionFetch((request) =>
       request.path === "/data_sources/ds-1" ? { body: { id: "ds-1", properties: schema } } : { body: { id: "1" } },
     );
 
-    await updateSnippet("token", "1", "ds-1", "Title", undefined, "SELECT 1;");
+    await updateSnippet("token", { ...update, body: "SELECT 1;" });
     const markdownRequest = stubbed.requests.find((request) => request.path.endsWith("/markdown"));
     expect(markdownRequest?.method).toBe("PATCH");
     expect(markdownRequest?.body).toMatchObject({
@@ -273,15 +275,42 @@ describe("updateSnippet", () => {
       request.path === "/data_sources/ds-1" ? { body: { id: "ds-1", properties: schema } } : { body: { id: "1" } },
     );
 
-    await updateSnippet("token", "1", "ds-1", "Title");
+    await updateSnippet("token", update);
     expect(stubbed.requests.some((request) => request.path.endsWith("/markdown"))).toBe(false);
   });
 
   it("本文が空文字なら Notion を呼ばずに失敗する", async () => {
     const stubbed = stubNotionFetch(() => ({ body: {} }));
-    await expect(updateSnippet("token", "1", "ds-1", "Title", undefined, "  ")).rejects.toThrow(
-      "Snippet body is empty",
-    );
+    await expect(updateSnippet("token", { ...update, body: "  " })).rejects.toThrow("Snippet body is empty");
     expect(stubbed.requests).toHaveLength(0);
+  });
+
+  it("保存先が変わったら移動してから移動後のスキーマでタイトルを書き戻す", async () => {
+    const stubbed = stubNotionFetch((request) =>
+      request.path === "/data_sources/ds-2"
+        ? { body: { id: "ds-2", properties: { Title: { type: "title" } } } }
+        : { body: { id: "1" } },
+    );
+
+    await updateSnippet("token", { ...update, dataSourceId: "ds-2" });
+
+    expect(stubbed.requests.map((request) => `${request.method} ${request.path}`)).toEqual([
+      "GET /data_sources/ds-2",
+      "POST /pages/1/move",
+      "PATCH /pages/1",
+    ]);
+    expect(stubbed.requests[1].body).toEqual({ parent: { type: "data_source_id", data_source_id: "ds-2" } });
+    expect(stubbed.requests.at(-1)?.body).toMatchObject({
+      properties: { Title: { title: [{ text: { content: "Title" } }] } },
+    });
+  });
+
+  it("保存先が変わらなければ移動しない", async () => {
+    const stubbed = stubNotionFetch((request) =>
+      request.path === "/data_sources/ds-1" ? { body: { id: "ds-1", properties: schema } } : { body: { id: "1" } },
+    );
+
+    await updateSnippet("token", update);
+    expect(stubbed.requests.some((request) => request.path.endsWith("/move"))).toBe(false);
   });
 });

@@ -43,7 +43,8 @@ Notion のデータベースにブックマークを保存し、タイトルと 
 ### Search Bookmarks: ブックマークを検索して開く
 
 - タイトル、URL、タグを横断検索する。Enter でブックマーク先を開く。
-- Edit Bookmark でタイトル、URL、タグ、本文（page clip）を更新できる。データベースは変えられない。
+- Edit Bookmark でタイトル、URL、タグ、本文（page clip）を更新できる。
+- Database を選び直すとページごと別のデータベースへ移せる。選べるのは Configure Bookmark Databases で選んだデータベースと、今の保存先。移動先の Tags は移動先のデータベースの語彙になるので、タグは選び直す。
 
 ### Save Bookmark: タイトルと URL を保存する
 

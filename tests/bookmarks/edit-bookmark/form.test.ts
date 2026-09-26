@@ -1,16 +1,37 @@
 import { describe, expect, it } from "vitest";
 import { MAX_CLIP_CHARS } from "../../../src/bookmarks/clip-limit";
-import { LoadedBookmark, resolveBookmarkEdit } from "../../../src/bookmarks/edit-bookmark/form";
+import { BookmarkFormValues, LoadedBookmark, resolveBookmarkEdit } from "../../../src/bookmarks/edit-bookmark/form";
 
 const loaded: LoadedBookmark = { markdown: "# body", clipTooLarge: false, tagsIncomplete: false };
+const dataSources = [
+  { id: "ds-1", title: "Bookmark" },
+  { id: "ds-2", title: "Work" },
+];
 
-function edit(...args: Parameters<typeof resolveBookmarkEdit>) {
-  const resolved = resolveBookmarkEdit(...args);
+/** 保存先の指定は既定で ds-1。データベース以外の解決を確かめるテストを短く書くための入口。 */
+function resolve(values: BookmarkFormValues, loadedArg: LoadedBookmark = loaded, canEditTags = false) {
+  return resolveBookmarkEdit({ dataSourceId: "ds-1", ...values }, loadedArg, canEditTags, dataSources);
+}
+
+function edit(values: BookmarkFormValues, loadedArg: LoadedBookmark = loaded, canEditTags = false) {
+  const resolved = resolve(values, loadedArg, canEditTags);
   if ("error" in resolved) {
     throw new Error(`unexpected error: ${resolved.error}`);
   }
   return resolved.edit;
 }
+
+describe("保存先", () => {
+  it("選んだデータベースを返す", () => {
+    expect(edit({ dataSourceId: "ds-2", clip: loaded.markdown }).dataSource).toEqual({ id: "ds-2", title: "Work" });
+  });
+
+  it("選択肢にないデータベースはエラーを返す", () => {
+    expect(resolveBookmarkEdit({ dataSourceId: "ds-9" }, loaded, false, dataSources)).toEqual({
+      error: "Select a database",
+    });
+  });
+});
 
 describe("URL", () => {
   it("前後の空白を落として保存する", () => {
@@ -24,7 +45,7 @@ describe("URL", () => {
   });
 
   it("http/https でなければエラーを返す", () => {
-    expect(resolveBookmarkEdit({ url: "example.com" }, loaded, false)).toEqual({
+    expect(resolve({ url: "example.com" })).toEqual({
       error: "URL must start with http:// or https://",
     });
   });

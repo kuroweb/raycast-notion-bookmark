@@ -3,6 +3,7 @@ import {
   NotionDataSource,
   NotionPage,
   NotionProperty,
+  movePage,
   notionFetch,
   paginate,
   plainText,
@@ -128,14 +129,19 @@ export async function loadSnippetForEdit(
   };
 }
 
-export async function updateSnippet(
-  token: string,
-  pageId: string,
-  dataSourceId: string,
-  title: string,
-  tags?: { selectedIds: string[]; newNames: string[] },
-  body?: string,
-): Promise<void> {
+export type SnippetUpdate = {
+  pageId: string;
+  /** 現在の保存先。dataSourceId と違えばページを移動する。 */
+  fromDataSourceId: string;
+  /** 更新後の保存先。 */
+  dataSourceId: string;
+  title: string;
+  tags?: { selectedIds: string[]; newNames: string[] };
+  body?: string;
+};
+
+export async function updateSnippet(token: string, update: SnippetUpdate): Promise<void> {
+  const { pageId, fromDataSourceId, dataSourceId, title, tags, body } = update;
   if (body !== undefined && body.trim().length === 0) {
     throw new Error("Snippet body is empty");
   }
@@ -151,6 +157,11 @@ export async function updateSnippet(
   const titleName = titlePropertyName(schema);
   if (!titleName) {
     throw new Error("This database needs a title property.");
+  }
+
+  // 移動でプロパティが引き継がれないことがあるので、移動してから移動後のスキーマに書き戻す。
+  if (dataSourceId !== fromDataSourceId) {
+    await movePage(token, pageId, dataSourceId);
   }
 
   if (body !== undefined) {

@@ -3,6 +3,7 @@ import {
   NotionDataSource,
   NotionPage,
   NotionProperty,
+  movePage,
   notionFetch,
   paginate,
   plainText,
@@ -120,15 +121,20 @@ async function loadPageMarkdown(token: string, pageId: string): Promise<{ markdo
   };
 }
 
-export async function updateBookmark(
-  token: string,
-  pageId: string,
-  dataSourceId: string,
-  title: string,
-  url: string | null,
-  tags?: { selectedIds: string[]; newNames: string[] },
-  markdown?: string,
-): Promise<void> {
+export type BookmarkUpdate = {
+  pageId: string;
+  /** 現在の保存先。target と違えばページを移動する。 */
+  fromDataSourceId: string;
+  /** 更新後の保存先。 */
+  dataSourceId: string;
+  title: string;
+  url: string | null;
+  tags?: { selectedIds: string[]; newNames: string[] };
+  markdown?: string;
+};
+
+export async function updateBookmark(token: string, update: BookmarkUpdate): Promise<void> {
+  const { pageId, fromDataSourceId, dataSourceId, title, url, tags, markdown } = update;
   const parsedUrl = url === null ? null : parseHttpUrl(url);
   if (url !== null && !parsedUrl) {
     throw new Error("URL must start with http:// or https://");
@@ -146,6 +152,11 @@ export async function updateBookmark(
   const urlName = urlPropertyName(schema);
   if (!titleName || !urlName) {
     throw new Error("This database needs a title property and a URL property.");
+  }
+
+  // 移動でプロパティが引き継がれないことがあるので、移動してから移動後のスキーマに書き戻す。
+  if (dataSourceId !== fromDataSourceId) {
+    await movePage(token, pageId, dataSourceId);
   }
 
   const content = title.trim().slice(0, 2000) || "Untitled";
