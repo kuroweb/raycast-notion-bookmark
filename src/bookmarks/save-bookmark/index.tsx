@@ -17,8 +17,9 @@ import {
 } from "@raycast/api";
 import { showFailureToast, usePromise } from "@raycast/utils";
 import { useRef, useState } from "react";
+import { preferredDataSourceId } from "../../lib/data-sources";
 import { DataSource } from "../../lib/notion-client";
-import { loadTagsForDataSource, parseTagNames } from "../../tags/tags";
+import { loadTagsForDataSource } from "../../tags/tags";
 import { createBookmark, findBookmarksByUrl } from "../bookmarks";
 import {
   loadLastSavedDataSourceId,
@@ -27,19 +28,9 @@ import {
   saveLastSavedDataSourceId,
   saveSaveClipEnabled,
 } from "../storage";
-import { hostname, parseHttpUrl } from "../url";
+import { parseHttpUrl } from "../url";
 import { readActiveTab, readPageClip } from "./clip-capture";
-import { prepareClip, toMarkdown } from "./clip-markdown";
-
-type FormValues = {
-  title?: string;
-  url?: string;
-  dataSourceId?: string;
-  tags?: string[];
-  newTags?: string;
-  saveClip?: boolean;
-  clip?: string;
-};
+import { SaveBookmarkFormValues, clipMarkdown, resolveBookmarkSave, savedStatusText } from "./form";
 
 type FormDefaults = {
   title: string;
@@ -95,7 +86,7 @@ export default function SaveBookmark(props: LaunchProps) {
       .catch(() => undefined);
   }
 
-  async function save(values: FormValues) {
+  async function save(values: SaveBookmarkFormValues) {
     if (isLoading || isSaving || tagsPending || error) {
       await showToast({
         style: Toast.Style.Failure,
@@ -105,25 +96,13 @@ export default function SaveBookmark(props: LaunchProps) {
       return;
     }
 
-    const dataSource = dataSources.find((item) => item.id === values.dataSourceId);
-    if (!dataSource) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Select a database",
-      });
+    const resolved = resolveBookmarkSave(values, dataSources);
+    if ("error" in resolved) {
+      await showToast({ style: Toast.Style.Failure, title: resolved.error });
       return;
     }
 
-    const url = parseHttpUrl(values.url);
-    if (!url) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "URL must start with http:// or https://",
-      });
-      return;
-    }
-
-    const content = (values.title?.trim() || hostname(url)).slice(0, 2000) || "Untitled";
+    const { dataSource, title: content, url, tags } = resolved.save;
     setIsSaving(true);
     let hud: string | undefined;
     try {
@@ -136,11 +115,7 @@ export default function SaveBookmark(props: LaunchProps) {
         hud = `Already saved in ${dataSource.title}`;
       } else {
         const clip = values.clip?.trim() || (await readPageClip(undefined, url));
-        const markdown = saveClip ? prepareClip(toMarkdown(clip, url), content) : "";
-        await createBookmark(token, dataSource.id, content, url, markdown || undefined, {
-          selectedIds: values.tags ?? [],
-          newNames: parseTagNames(values.newTags),
-        });
+        await createBookmark(token, dataSource.id, content, url, clipMarkdown(clip, url, content, saveClip), tags);
         hud = `Saved to ${dataSource.title}`;
       }
     } catch (saveError) {
@@ -315,20 +290,4 @@ async function loadFormDefaults(fallbackText: string | undefined): Promise<FormD
     dataSourceId,
     dataSources,
   };
-}
-
-function preferredDataSourceId(dataSources: DataSource[], id: string | undefined): string | undefined {
-  if (!id) {
-    return undefined;
-  }
-  return dataSources.some((dataSource) => dataSource.id === id) ? id : undefined;
-}
-
-function savedStatusText(bookmarks: { dataSourceTitle: string }[]): string {
-  if (bookmarks.length === 0) {
-    return "Not saved";
-  }
-
-  const names = [...new Set(bookmarks.map((bookmark) => bookmark.dataSourceTitle))];
-  return `Already saved in ${names.join(", ")}`;
 }

@@ -18,24 +18,18 @@ import {
 } from "@raycast/api";
 import { showFailureToast, usePromise } from "@raycast/utils";
 import { useRef, useState } from "react";
+import { preferredDataSourceId } from "../../lib/data-sources";
 import { DataSource } from "../../lib/notion-client";
-import { loadTagsForDataSource, parseTagNames } from "../../tags/tags";
+import { loadTagsForDataSource } from "../../tags/tags";
 import { createSnippet } from "../snippets";
 import {
   loadLastSavedSnippetDataSourceId,
   loadSelectedSnippetDataSources,
   saveLastSavedSnippetDataSourceId,
 } from "../storage";
+import { SaveSnippetFormValues, resolveSnippetSave } from "./form";
 
 const UNTITLED = "Untitled";
-
-type FormValues = {
-  title?: string;
-  body?: string;
-  dataSourceId?: string;
-  tags?: string[];
-  newTags?: string;
-};
 
 type FormDefaults = {
   title: string;
@@ -64,7 +58,7 @@ export default function SaveSnippet(props: LaunchProps) {
     revealedFields.current = true;
   }
 
-  async function save(values: FormValues) {
+  async function save(values: SaveSnippetFormValues) {
     if (isLoading || isSaving || tagsPending || error) {
       await showToast({
         style: Toast.Style.Failure,
@@ -74,32 +68,17 @@ export default function SaveSnippet(props: LaunchProps) {
       return;
     }
 
-    const dataSource = dataSources.find((item) => item.id === values.dataSourceId);
-    if (!dataSource) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Select a database",
-      });
+    const resolved = resolveSnippetSave(values, dataSources);
+    if ("error" in resolved) {
+      await showToast({ style: Toast.Style.Failure, title: resolved.error });
       return;
     }
 
-    const body = values.body ?? "";
-    if (body.trim().length === 0) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Snippet body is empty",
-      });
-      return;
-    }
-
-    const content = (values.title?.trim() || UNTITLED).slice(0, 2000);
+    const { dataSource, title: content, body, tags } = resolved.save;
     setIsSaving(true);
     try {
       await saveLastSavedSnippetDataSourceId(dataSource.id);
-      await createSnippet(token, dataSource.id, content, body, {
-        selectedIds: values.tags ?? [],
-        newNames: parseTagNames(values.newTags),
-      });
+      await createSnippet(token, dataSource.id, content, body, tags);
     } catch (saveError) {
       await showFailureToast(saveError, { title: "Could not save snippet" });
       return;
@@ -187,13 +166,6 @@ async function loadFormDefaults(fallbackText: string | undefined): Promise<FormD
     dataSourceId,
     dataSources,
   };
-}
-
-function preferredDataSourceId(dataSources: DataSource[], id: string | undefined): string | undefined {
-  if (!id) {
-    return undefined;
-  }
-  return dataSources.some((dataSource) => dataSource.id === id) ? id : undefined;
 }
 
 async function readInitialBody(fallbackText: string | undefined): Promise<string> {

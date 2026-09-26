@@ -1,19 +1,12 @@
 import { Action, ActionPanel, Form, Icon, Toast, getPreferenceValues, showToast, useNavigation } from "@raycast/api";
 import { showFailureToast, usePromise } from "@raycast/utils";
 import { useState } from "react";
-import { loadTagsForDataSource, parseTagNames } from "../../tags/tags";
+import { loadTagsForDataSource, selectedTagIds } from "../../tags/tags";
 import { loadSnippetForEdit, updateSnippet } from "../snippets";
-import { Tag } from "../../tags/types";
 import { Snippet } from "../types";
+import { SnippetFormValues, resolveSnippetEdit } from "./form";
 
 const UNTITLED = "Untitled";
-
-type FormValues = {
-  title?: string;
-  body?: string;
-  tags?: string[];
-  newTags?: string;
-};
 
 export function EditSnippet({ snippet, onSaved }: { snippet: Snippet; onSaved: () => void }) {
   const token = getPreferenceValues<Preferences>().notionToken.trim();
@@ -28,7 +21,7 @@ export function EditSnippet({ snippet, onSaved }: { snippet: Snippet; onSaved: (
     execute: snippet.dataSourceId.length > 0,
   });
 
-  async function save(values: FormValues) {
+  async function save(values: SnippetFormValues) {
     if (isSaving || isLoading || isLoadingTags || error || !data) {
       await showToast({
         style: Toast.Style.Failure,
@@ -38,31 +31,16 @@ export function EditSnippet({ snippet, onSaved }: { snippet: Snippet; onSaved: (
       return;
     }
 
-    const nextBody = values.body ?? "";
-    if (!data.bodyTooLarge && nextBody.trim().length === 0) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "Snippet body is empty",
-      });
+    const resolved = resolveSnippetEdit(values, data, Boolean(tagsData));
+    if ("error" in resolved) {
+      await showToast({ style: Toast.Style.Failure, title: resolved.error });
       return;
     }
 
-    const content = data.bodyTooLarge ? undefined : nextBody;
+    const { title, tags, body } = resolved.edit;
     setIsSaving(true);
     try {
-      await updateSnippet(
-        token,
-        snippet.id,
-        snippet.dataSourceId,
-        (values.title?.trim() || UNTITLED).slice(0, 2000),
-        tagsData && !data.tagsIncomplete
-          ? {
-              selectedIds: values.tags ?? [],
-              newNames: parseTagNames(values.newTags),
-            }
-          : undefined,
-        content,
-      );
+      await updateSnippet(token, snippet.id, snippet.dataSourceId, title, tags, body);
     } catch (saveError) {
       await showFailureToast(saveError, { title: "Could not update snippet" });
       return;
@@ -124,9 +102,4 @@ export function EditSnippet({ snippet, onSaved }: { snippet: Snippet; onSaved: (
       ) : null}
     </Form>
   );
-}
-
-function selectedTagIds(tagIds: string[], tags: Tag[]): string[] {
-  const available = new Set(tags.map((tag) => tag.id));
-  return tagIds.filter((id) => available.has(id));
 }
