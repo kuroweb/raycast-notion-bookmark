@@ -64,6 +64,14 @@ export async function searchAccessibleDataSources(token: string): Promise<Notion
   return results.filter((item) => item.object === "data_source" && !item.in_trash);
 }
 
+/** ページを別のデータソースへ移す。parent は更新APIでは変えられないので専用エンドポイントを使う。 */
+export async function movePage(token: string, pageId: string, dataSourceId: string): Promise<void> {
+  await notionFetch<NotionPage>(token, `/pages/${encodeURIComponent(pageId)}/move`, {
+    method: "POST",
+    body: JSON.stringify({ parent: { type: "data_source_id", data_source_id: dataSourceId } }),
+  });
+}
+
 export async function paginate<T>(fetchPage: (cursor: string | undefined) => Promise<NotionList<T>>): Promise<T[]> {
   const all: T[] = [];
   let cursor: string | undefined;

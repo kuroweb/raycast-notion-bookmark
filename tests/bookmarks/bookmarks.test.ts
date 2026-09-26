@@ -218,6 +218,14 @@ describe("loadBookmarkForEdit", () => {
   });
 });
 
+const update = {
+  pageId: "1",
+  fromDataSourceId: "ds-1",
+  dataSourceId: "ds-1",
+  title: "Title",
+  url: "https://example.com/a",
+};
+
 describe("updateBookmark", () => {
   it("本文は上限で切って replace_content で送る", async () => {
     const stubbed = stubNotionFetch((request) =>
@@ -226,15 +234,10 @@ describe("updateBookmark", () => {
         : { body: { id: "1" } },
     );
 
-    await updateBookmark(
-      "token",
-      "1",
-      "ds-1",
-      "Title",
-      "https://example.com/a",
-      undefined,
-      "a".repeat(MAX_CLIP_CHARS + 10),
-    );
+    await updateBookmark("token", {
+      ...update,
+      markdown: "a".repeat(MAX_CLIP_CHARS + 10),
+    });
     const markdownRequest = stubbed.requests.find((request) => request.path.endsWith("/markdown"));
     const newStr = (markdownRequest?.body as { replace_content: { new_str: string } }).replace_content.new_str;
     expect(markdownRequest?.method).toBe("PATCH");
@@ -248,7 +251,7 @@ describe("updateBookmark", () => {
         : { body: { id: "1" } },
     );
 
-    await updateBookmark("token", "1", "ds-1", "Title", "https://example.com/a");
+    await updateBookmark("token", update);
     expect(stubbed.requests.some((request) => request.path.endsWith("/markdown"))).toBe(false);
   });
 
@@ -259,16 +262,56 @@ describe("updateBookmark", () => {
         : { body: { id: "1" } },
     );
 
-    await updateBookmark("token", "1", "ds-1", "Title", null);
+    await updateBookmark("token", { ...update, url: null });
     expect(stubbed.requests.at(-1)?.body).toMatchObject({ properties: { URL: { url: null } } });
   });
 
   it("URL が不正なら Notion を呼ばずに失敗する", async () => {
     const stubbed = stubNotionFetch(() => ({ body: {} }));
-    await expect(updateBookmark("token", "1", "ds-1", "Title", "example.com")).rejects.toThrow(
+    await expect(updateBookmark("token", { ...update, url: "example.com" })).rejects.toThrow(
       "URL must start with http:// or https://",
     );
     expect(stubbed.requests).toHaveLength(0);
+  });
+
+  it("保存先が変わったら移動してから移動後のスキーマでプロパティを書き戻す", async () => {
+    const stubbed = stubNotionFetch((request) =>
+      request.path === "/data_sources/ds-2"
+        ? { body: { id: "ds-2", properties: { Title: { type: "title" }, Link: { type: "url" } } } }
+        : { body: { id: "1" } },
+    );
+
+    await updateBookmark("token", { ...update, dataSourceId: "ds-2" });
+
+    expect(stubbed.requests.map((request) => `${request.method} ${request.path}`)).toEqual([
+      "GET /data_sources/ds-2",
+      "POST /pages/1/move",
+      "PATCH /pages/1",
+    ]);
+    expect(stubbed.requests[1].body).toEqual({ parent: { type: "data_source_id", data_source_id: "ds-2" } });
+    expect(stubbed.requests.at(-1)?.body).toMatchObject({
+      properties: { Title: { title: [{ text: { content: "Title" } }] }, Link: { url: "https://example.com/a" } },
+    });
+  });
+
+  it("保存先が変わらなければ移動しない", async () => {
+    const stubbed = stubNotionFetch((request) =>
+      request.path === "/data_sources/ds-1"
+        ? { body: { id: "ds-1", properties: { Name: { type: "title" }, URL: { type: "url" } } } }
+        : { body: { id: "1" } },
+    );
+
+    await updateBookmark("token", update);
+    expect(stubbed.requests.some((request) => request.path.endsWith("/move"))).toBe(false);
+  });
+
+  it("移動先に title と URL がなければ移動しない", async () => {
+    const stubbed = stubNotionFetch(() => ({ body: { id: "ds-2", properties: { Name: { type: "title" } } } }));
+
+    await expect(updateBookmark("token", { ...update, dataSourceId: "ds-2" })).rejects.toThrow(
+      "This database needs a title property and a URL property.",
+    );
+    expect(stubbed.requests.some((request) => request.path.endsWith("/move"))).toBe(false);
   });
 });
 
