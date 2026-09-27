@@ -111,8 +111,17 @@ function SnippetItem({ snippet, token, onReload }: { snippet: Snippet; token: st
       id={snippet.id}
       title={snippet.title}
       icon={Icon.Document}
-      accessories={[{ tag: snippet.dataSourceTitle }, ...snippet.tags.slice(0, 3).map((name) => ({ tag: name }))]}
-      detail={<List.Item.Detail markdown={previewMarkdown(snippet.body ?? "", snippet.truncated === true)} />}
+      accessories={snippet.tags.slice(0, 3).map((name) => ({ tag: name }))}
+      detail={
+        <List.Item.Detail
+          markdown={previewMarkdown(snippet.body ?? "", snippet.truncated === true)}
+          metadata={
+            <List.Item.Detail.Metadata>
+              <List.Item.Detail.Metadata.Label title="Database" text={snippet.dataSourceTitle} />
+            </List.Item.Detail.Metadata>
+          }
+        />
+      }
       actions={
         <ActionPanel>
           <Action title="Paste Snippet" icon={Icon.Clipboard} onAction={() => pasteSnippet(token, snippet.id)} />
