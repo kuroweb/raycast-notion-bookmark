@@ -102,7 +102,7 @@
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
     "@raycast/api": "^1.104.1",
-    "@raycast/utils": "^2.2.4",
+    "@raycast/utils": "^2.3.2",
     "linkedom": "^0.18.13",
     "turndown": "^7.2.4"
   },
