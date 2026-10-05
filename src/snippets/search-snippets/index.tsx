@@ -6,9 +6,7 @@ import {
   Keyboard,
   LaunchType,
   List,
-  PopToRootType,
   Toast,
-  closeMainWindow,
   getPreferenceValues,
   launchCommand,
   openExtensionPreferences,
@@ -187,7 +185,8 @@ async function pasteSnippet(token: string, pageId: string) {
       return;
     }
 
-    await closeMainWindow({ clearRootSearch: true, popToRootType: PopToRootType.Immediate });
+    // closeMainWindow で先にルートへ戻すとコマンドが終了してペーストが届かない。
+    // ウィンドウを閉じて直前のアプリへ貼るのは Clipboard.paste に任せる。
     await Clipboard.paste(snippet.body);
   } catch (error) {
     await showFailureToast(error, { title: "Could not paste snippet" });
