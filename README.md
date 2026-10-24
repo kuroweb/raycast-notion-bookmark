@@ -145,10 +145,3 @@ src/
   snippets/     Search / Save / Configure と本文キャッシュ
   *.tsx         package.json の commands に対応するエントリポイント
 ```
-
-### GitHub Actions での Claude
-
-- `kuroweb` または Dependabot によるドラフト以外の PR の作成・更新・再オープン・レビュー準備完了で、自動レビューを実行する。
-- `kuroweb` が PR のコメント、行コメント、レビュー本文に `@claude` を含めると、Claude を呼び出せる。通常の Issue コメントは対象外。
-- Sonnet を使い、実行時間の上限は15分。レビュー用スキルは `kuroweb/ai-manifest` からインストールする。
-- リポジトリの Actions secrets に `CLAUDE_CODE_OAUTH_TOKEN` を設定する。Dependabot の自動レビューにも同名の Dependabot secret を設定する。
