@@ -101,14 +101,14 @@
   ],
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
-    "@raycast/api": "^2.9.0",
+    "@raycast/api": "^2.10.1",
     "@raycast/utils": "^2.3.3",
     "linkedom": "^0.18.13",
     "turndown": "^7.2.4"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^2.1.1",
-    "@types/node": "24.10.1",
+    "@types/node": "26.6.6",
     "@types/react": "19.3.0",
     "@types/turndown": "^5.0.6",
     "eslint": "^10.12.0",
