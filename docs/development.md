@@ -13,7 +13,7 @@ npm run typecheck
 npm run build
 ```
 
-### テスト
+## テスト
 
 ```bash
 npm run test
@@ -24,7 +24,7 @@ npm run test:watch
 - Raycast と Notion API は `tests/support/` のモックへ差し替えるので、実行に Raycast もトークンも要らない。
 - コマンドの UI（`*.tsx`）はテスト対象外。判定ロジックは `form.ts` などへ切り出してテストする。
 
-### ディレクトリ構成
+## ディレクトリ構成
 
 ```
 src/
